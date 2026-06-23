@@ -1,0 +1,19 @@
+[project]
+name = "credit-default-pipeline"
+version = "0.1.0"
+description = "Pipeline end-to-end for risk's prediction of company insolvency."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = []
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 72
