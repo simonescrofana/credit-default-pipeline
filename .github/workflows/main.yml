@@ -1,0 +1,30 @@
+name: CI/CD pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  quality-assurance:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4  # This version can be tested with act
+
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v5  # This version can be tested with act
+      with:
+        enable-cache: true
+        version: "latest"
+
+    - name: Setup Python 3.13
+      run: uv python install 3.13
+
+    - name: Run Ruff Linter
+      run: uvx ruff check .
+
+    - name: Run Ruff Formatter
+      run: uvx ruff format --check .

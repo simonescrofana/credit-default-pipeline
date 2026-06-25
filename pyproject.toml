@@ -1,0 +1,25 @@
+[project]
+name = "credit-default-pipeline"
+version = "0.1.0"
+description = "Pipeline end-to-end for risk's prediction of company insolvency."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.2",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "D"]
+ignore = [
+    "D203", # Disable the empty line before class (choosing D211)
+    "D213"  # Disable summary on the second line (choosing D212)
+]
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 72
