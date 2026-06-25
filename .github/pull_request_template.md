@@ -10,5 +10,5 @@
 ## 🧪 How to Test / Verify
 ```bash
 uv 
-# Inserisci qui il comando di test o di esecuzione (es: uv run pytest)
+# Insert here test/execution command(s) (es: uv run pytest)
 ```
