@@ -55,6 +55,9 @@ class Settings(BaseSettings):
         str, Field(description="Network host for the database.")
     ] = "localhost"
 
+    # LOGFIRE
+    LOGFIRE_TOKEN: SecretPassword
+
     @computed_field
     @property
     def database_url(self) -> str:
