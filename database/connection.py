@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from config import settings
 
-DATABASE_URL = settings.DATABASE_URL
+DATABASE_URL = settings.database_url
 
 # pool_pre_ping, on connection request, checks the connection
 # and re-creates it if it was broken
