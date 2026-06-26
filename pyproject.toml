@@ -5,8 +5,10 @@ description = "Pipeline end-to-end for risk's prediction of company insolvency."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "psycopg2-binary>=2.9.12",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
+    "pytest>=9.1.1",
     "sqlalchemy>=2.0.51",
 ]
 
@@ -24,3 +26,12 @@ ignore = [
 [tool.ruff.format]
 docstring-code-format = true
 docstring-code-line-length = 72
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.coverage.run]
+omit = [
+    "**/__init__.py",
+    "config.py",
+]
