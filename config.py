@@ -4,7 +4,7 @@ This module, based on Pydantic Settings defines the validation rules for each
 environment variable required by the software to work. It configures the
 following services:
     * PostgreSQL
-
+    * Logfire
 """
 
 from typing import Annotated
@@ -32,7 +32,10 @@ class Settings(BaseSettings):
             * POSTGRES_PORT (int): Port relative to the PostgreSQL service.
             Default: 5432.
             * POSTGRES_HOST (str): Network host for the database. Default: "localhost".
-
+        
+        * Logfire:
+        Attributes:
+            * LOGFIRE_TOKEN (str): secret API key for writing tokens (logs) on Logfire dashboard.
     """
 
     model_config = SettingsConfigDict(
