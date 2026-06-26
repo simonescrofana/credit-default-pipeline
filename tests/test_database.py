@@ -6,35 +6,39 @@ scripts:
         tests the connection to the PostgreSQL database.
 """
 
-from collections.abc import Iterator
-
 import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from database.connection import SessionLocal
+from database.connection import get_db
 
 
-@pytest.fixture(scope="module")
-def get_db() -> Iterator[Session]:
-    """Give a SQLAlchemy Session to work as a fixture.
-
-    It provides a SQLAlchemy Session to work with the PostgreSQL
-    database. It is defined as a fixture to test connection
-    to the PostgreSQL database.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def test_db_connection(get_db: Iterator[Session]) -> None:
+def test_db_connection() -> None:
     """Test connection to PostgreSQL database.
 
     The function tests the connection asking a simple "SELECT 1" statement.
     """
+    db_generator = get_db()
+    db_session = next(db_generator)
+
     statement = text("SELECT 1")
-    result = get_db.execute(statement).scalar()
+    result = db_session.execute(statement).scalar()
     assert result == 1
+
+
+def test_get_db_raises_and_closes_on_error() -> None:
+    """Test on closure of connection in error case.
+
+    The function tests the correct closure of the database Local Session
+    when an error occurs.
+    """
+    db_generator = get_db()
+    db_session = next(db_generator)
+
+    assert isinstance(db_session, Session)
+
+    with pytest.raises(RuntimeError):
+        db_generator.throw(RuntimeError)
+
+    with pytest.raises(StopIteration):
+        next(db_generator)
