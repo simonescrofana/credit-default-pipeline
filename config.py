@@ -32,10 +32,11 @@ class Settings(BaseSettings):
             * POSTGRES_PORT (int): Port relative to the PostgreSQL service.
             Default: 5432.
             * POSTGRES_HOST (str): Network host for the database. Default: "localhost".
-        
+
         * Logfire:
         Attributes:
-            * LOGFIRE_TOKEN (str): secret API key for writing tokens (logs) on Logfire dashboard.
+            * LOGFIRE_TOKEN (str): secret API key for writing tokens (logs) on
+            Logfire dashboard.
     """
 
     model_config = SettingsConfigDict(
