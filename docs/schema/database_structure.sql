@@ -41,7 +41,7 @@ CREATE TABLE "financial_statements" (
   "liquidity_cash" decimal(15,2) NOT NULL,
   "share_capital" decimal(15,2) NOT NULL,
   "ebitda" decimal(15,2) NOT NULL,
-  CONSTRAINT "fiscal_year_costraint" CHECK (fiscal_year >= 2000),
+  CONSTRAINT "fiscal_year_constraint" CHECK (fiscal_year >= 2000),
   PRIMARY KEY ("company_id", "fiscal_year")
 );
 
