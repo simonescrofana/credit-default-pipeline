@@ -10,6 +10,26 @@ jobs:
   quality-assurance:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres_user
+          POSTGRES_PASSWORD: postgres_password
+          POSTGRES_DB: postgres_db
+        ports:
+          - 127.0.0.1:5434:5432
+
+        # pg_isready: checks if db is ready/up
+        # interval 10s: execute this check every 10 s
+        # timeout 5s: checks if pg_isready takes > 5 s
+        # retries: max number of tries
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5 
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4  # This version can be tested with act
@@ -28,3 +48,14 @@ jobs:
 
     - name: Run Ruff Formatter
       run: uvx ruff format --check .
+
+    - name: Run Tests with Pytest
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5434
+        POSTGRES_USER: postgres_user
+        POSTGRES_PASSWORD: postgres_password
+        POSTGRES_DB: postgres_db
+        LOGFIRE_TOKEN: "${{ secrets.LOGFIRE_TOKEN }}"
+      run: |
+        uv run pytest --cov=. --cov-report=term-missing --cov-fail-under=85
