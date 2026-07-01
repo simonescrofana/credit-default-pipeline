@@ -3,10 +3,11 @@ CREATE TABLE "companies" (
   "vat_number" varchar(11) UNIQUE NOT NULL,
   "legal_name" varchar NOT NULL,
   "legal_form" varchar(50) NOT NULL,
-  "industry_sector" varchar(9) NOT NULL,
+  "industry_sector" varchar(30) NOT NULL,
   "foundation_date" date NOT NULL,
   "registered_office_region" varchar(100),
-  "is_active" bool NOT NULL DEFAULT true
+  "is_active" bool NOT NULL DEFAULT true,
+  CHECK (industry_sector IN ('manufacturing', 'chemical_heavy_industry', 'services', 'commerce', 'food_beverage', 'agriculture', 'construction', 'tech', 'hospitality', 'healthcare', 'transportation', 'utilities'))
 );
 
 CREATE TABLE "energy_contracts" (
@@ -41,7 +42,7 @@ CREATE TABLE "financial_statements" (
   "liquidity_cash" decimal(15,2) NOT NULL,
   "share_capital" decimal(15,2) NOT NULL,
   "ebitda" decimal(15,2) NOT NULL,
-  CONSTRAINT "fiscal_year_constraint" CHECK (fiscal_year >= 2000),
+  CONSTRAINT "fiscal_year_costraint" CHECK (fiscal_year >= 2000),
   PRIMARY KEY ("company_id", "fiscal_year")
 );
 
@@ -132,7 +133,7 @@ CREATE INDEX ON "user_web_logins" ("company_id");
 
 CREATE INDEX ON "user_web_logins" ("user_id");
 
-CREATE INDEX ON "user_web_logins" USING brin ("login_timestamp");
+CREATE INDEX ON "user_web_logins" ("login_timestamp");
 
 ALTER TABLE "energy_contracts" ADD FOREIGN KEY ("company_id") REFERENCES "companies" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
