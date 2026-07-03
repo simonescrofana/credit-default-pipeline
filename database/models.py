@@ -574,5 +574,5 @@ class UserWebLogin(Base):
         CheckConstraint(
             "login_timestamp <= CURRENT_TIMESTAMP",
             name="past_login_timestamp_constraint",
-        )
+        ),
     )
