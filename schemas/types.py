@@ -17,7 +17,7 @@ from pydantic import Field
 # 1. ID Fields
 # ==============================================================================
 
-CompanyIdField = Annotated[
+CompanyId = Annotated[
     int,
     Field(
         ...,
@@ -26,7 +26,7 @@ CompanyIdField = Annotated[
         "(this is also the primary key of financial_statements table).",
     ),
 ]
-ContractIdField = Annotated[
+ContractId = Annotated[
     int,
     Field(
         ...,
@@ -35,7 +35,7 @@ ContractIdField = Annotated[
         "(primary key of energy_contracts table).",
     ),
 ]
-InvoiceIdField = Annotated[
+InvoiceId = Annotated[
     int,
     Field(
         ...,
@@ -44,7 +44,7 @@ InvoiceIdField = Annotated[
         "(primary key of invoices table).",
     ),
 ]
-PaymentIdField = Annotated[
+PaymentId = Annotated[
     int,
     Field(
         ...,
@@ -53,7 +53,7 @@ PaymentIdField = Annotated[
         "(primary key of payments table).",
     ),
 ]
-TicketIdField = Annotated[
+TicketId = Annotated[
     int,
     Field(
         ...,
@@ -62,7 +62,7 @@ TicketIdField = Annotated[
         "(primary key of crm_support_tickets table).",
     ),
 ]
-LoginIdField = Annotated[
+LoginId = Annotated[
     int,
     Field(
         ...,
@@ -71,7 +71,7 @@ LoginIdField = Annotated[
         "(primary key of user_web_logins table).",
     ),
 ]
-UserIdField = Annotated[
+UserId = Annotated[
     int,
     Field(..., gt=0, description="Unique identifier for the specific corporate user."),
 ]
@@ -170,7 +170,7 @@ FinancialAmountGeZero = Annotated[
         description="Monetary balance metrics strictly bound to non-negative domains.",
     ),
 ]
-InvoiceAmountField = Annotated[
+InvoiceAmount = Annotated[
     Decimal,
     Field(
         ...,
@@ -181,7 +181,7 @@ InvoiceAmountField = Annotated[
         "zero-consumption or perfect adjustments.",
     ),
 ]
-PaymentAmountField = Annotated[
+PaymentAmount = Annotated[
     Decimal,
     Field(
         ...,
@@ -279,6 +279,7 @@ PressureLevel = Annotated[
 PowerKw = Annotated[
     Optional[Decimal],
     Field(
+        gt=0,
         max_digits=10,
         decimal_places=2,
         description="Contracted power capacity specified in the contract,"
@@ -306,7 +307,7 @@ ContractStatus = Annotated[
 # ==============================================================================
 
 # CommodityType already defined for energy contracts
-InvoiceNumberField = Annotated[
+InvoiceNumber = Annotated[
     str,
     Field(
         ...,
@@ -314,7 +315,7 @@ InvoiceNumberField = Annotated[
         description="Unique commercial identification string of the invoice.",
     ),
 ]
-ElectricityConsumptionField = Annotated[
+ElectricityConsumption = Annotated[
     Optional[Decimal],
     Field(
         ge=0,
@@ -323,7 +324,7 @@ ElectricityConsumptionField = Annotated[
         description="Actual energy consumption measured in kilowatt-hours (kWh).",
     ),
 ]
-GasConsumptionField = Annotated[
+GasConsumption = Annotated[
     Optional[Decimal],
     Field(
         ge=0,
@@ -333,7 +334,7 @@ GasConsumptionField = Annotated[
         "Standard Cubic Meters (SMC).",
     ),
 ]
-InvoiceStatusType = Annotated[
+InvoiceStatus = Annotated[
     Literal["unpaid", "paid", "overdue", "cancelled"],
     Field(..., description="Accounting status of the generated utility invoice."),
 ]
@@ -343,21 +344,22 @@ InvoiceStatusType = Annotated[
 # 7. "payments" Table Specific Fields
 # ==============================================================================
 
-PaymentMethodType = Annotated[
+PaymentMethod = Annotated[
     Literal["direct_debit", "bank_transfer", "credit_card", "postal_bulletin", "cash"],
     Field(..., description="Financial settlement channel chosen by the customer."),
 ]
-TransactionReferenceField = Annotated[
+TransactionReference = Annotated[
     Optional[str],
     Field(
         max_length=100,
         description="Unique banking/transaction clearings reference string.",
     ),
 ]
-PaymentStatusType = Annotated[
+PaymentStatus = Annotated[
     Literal["pending", "completed", "failed", "refunded"],
     Field(
         ...,
+        max_length=20,
         description="Lifecycle state of the specific financial transaction.",
     ),
 ]
@@ -367,11 +369,11 @@ PaymentStatusType = Annotated[
 # 8. "crm_support_tickets" Table Specific Fields
 # ==============================================================================
 
-TicketCategoryType = Annotated[
+TicketCategory = Annotated[
     Literal["billing", "technical", "onboarding", "commercial"],
     Field(..., description="CRM categorization of the inbound support request."),
 ]
-SatisfactionScoreField = Annotated[
+SatisfactionScore = Annotated[
     Optional[int],
     Field(
         ge=1,
@@ -385,7 +387,7 @@ SatisfactionScoreField = Annotated[
 # 9. "user_web_logins" Table Specific Fields
 # ==============================================================================
 
-IpAddressField = Annotated[
+IpAddress = Annotated[
     str,
     Field(
         ...,

@@ -61,7 +61,7 @@ CREATE TABLE "invoices" (
   "contract_id" bigint NOT NULL,
   "commodity_type" varchar(11) NOT NULL,
   "invoice_number" varchar(50) UNIQUE NOT NULL,
-  "energy_consumption_kwh" decimal(10,2),
+  "electricity_consumption_kwh" decimal(10,2),
   "gas_consumption_scm" decimal(10,2),
   "amount_excluding_tax" decimal(15,2) NOT NULL,
   "tax_amount" decimal(15,2) NOT NULL,

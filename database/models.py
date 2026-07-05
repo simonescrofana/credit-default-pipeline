@@ -295,7 +295,7 @@ class Invoice(Base):
     'id' of the invoice, 'contract_id' which is contract related to the invoice,
     'commodity_type' indicating the type of energy (electricity, gas), 'invoice_number'
     which is the unique identification number of the invoice (not the id in the database
-    which is the first column), 'energy_consumption_kwh' and 'gas_consumption_scm'
+    which is the first column), 'electricity_consumption_kwh' and 'gas_consumption_scm'
     reporting the actual energy consumed by the company for the period specified by
     the invoice, 'amount_excluding_tax', 'tax_amount' and 'total_amount' specifying
     the costs of the invoices, 'issue_date' and 'due_date' for the invoice and
@@ -314,7 +314,9 @@ class Invoice(Base):
     )
     commodity_type: Mapped[str] = mapped_column(String(11), nullable=False)
     invoice_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    energy_consumption_kwh: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    electricity_consumption_kwh: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2)
+    )
     gas_consumption_scm: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
     amount_excluding_tax: Mapped[Decimal] = mapped_column(
         Numeric(15, 2), nullable=False
@@ -366,8 +368,8 @@ class Invoice(Base):
         ),
         CheckConstraint("tax_amount >= 0", name="positive_tax_amount_constraint"),
         CheckConstraint(
-            """(energy_consumption_kwh IS NULL) OR
-            (energy_consumption_kwh >= 0)""",
+            """(electricity_consumption_kwh IS NULL) OR
+            (electricity_consumption_kwh >= 0)""",
             name="positive_electricity_consumption_constraint",
         ),
         CheckConstraint(
@@ -377,7 +379,7 @@ class Invoice(Base):
         ),
         CheckConstraint(
             """(commodity_type != 'electricity') OR
-            (energy_consumption_kwh IS NOT NULL AND
+            (electricity_consumption_kwh IS NOT NULL AND
             gas_consumption_scm IS NULL)""",
             name="electricity_consumption_integrity_constraint",
         ),
