@@ -386,7 +386,7 @@ class Invoice(Base):
         CheckConstraint(
             """(commodity_type != 'gas') OR
             (gas_consumption_scm IS NOT NULL AND
-            energy_consumption_kwh IS NULL)""",
+            electricity_consumption_kwh IS NULL)""",
             name="gas_consumption_integrity_constraint",
         ),
     )
