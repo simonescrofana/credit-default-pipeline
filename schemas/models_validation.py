@@ -19,7 +19,7 @@ The schemas map one-to-one with the following relational database entities:
 import datetime
 from typing import Optional, Self
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 
 from schemas.base import BaseResponseSchema
 from schemas.types import (
@@ -37,7 +37,7 @@ from schemas.types import (
     FoundationDate,
     GasConsumption,
     GasMeterClass,
-    IndustrySectorName,
+    IndustrySectorType,
     InvoiceAmount,
     InvoiceDueDate,
     InvoiceId,
@@ -69,6 +69,7 @@ from schemas.types import (
     VatNumber,
     VoltageLevel,
 )
+from utils.timezone_utils import ensure_utc_aware
 
 
 class CompanyCreate(BaseResponseSchema):
@@ -95,7 +96,7 @@ class CompanyCreate(BaseResponseSchema):
     vat_number: VatNumber
     legal_name: LegalName
     legal_form: LegalForm
-    industry_sector: IndustrySectorName
+    industry_sector: IndustrySectorType
     foundation_date: FoundationDate
     registered_office_region: Optional[OfficeRegion] = None
     is_active: IsActiveFlag = True
@@ -114,7 +115,8 @@ class CompanyCreate(BaseResponseSchema):
             ValueError: If the foundation date is set to a future date.
 
         """
-        if self.foundation_date > datetime.date.today():
+        today = datetime.datetime.now(tz=datetime.timezone.utc).date()
+        if self.foundation_date > today:
             raise ValueError("Foundation date can not be in the future.")
 
         return self
@@ -257,7 +259,7 @@ class EnergyContractCreate(BaseResponseSchema):
                 termination date is missing (None).
 
         """
-        if self.contract_status == "terminated" and self.termination_date is not None:
+        if self.contract_status == "terminated" and self.termination_date is None:
             raise ValueError("A terminated contract must specify its termination date.")
 
         return self
@@ -335,7 +337,7 @@ class InvoiceCreate(BaseResponseSchema):
         invoice_number (InvoiceNumber): Unique commercial identification string.
         electricity_consumption_kwh (ElectricityConsumption): Measured
             electricity (>= 0). Defaults to None.
-        gas_consumption_smc (GasConsumption): Measured gas volume (>= 0).
+        gas_consumption_scm (GasConsumption): Measured gas volume (>= 0).
             Defaults to None.
         amount_excluding_tax (InvoiceAmount): Net monetary amount excluding
             taxes (>= 0.00).
@@ -353,7 +355,7 @@ class InvoiceCreate(BaseResponseSchema):
     commodity_type: CommodityType
     invoice_number: InvoiceNumber
     electricity_consumption_kwh: Optional[ElectricityConsumption] = None
-    gas_consumption_smc: Optional[GasConsumption] = None
+    gas_consumption_scm: Optional[GasConsumption] = None
     amount_excluding_tax: InvoiceAmount
     tax_amount: InvoiceAmount
     total_amount: InvoiceAmount
@@ -378,7 +380,7 @@ class InvoiceCreate(BaseResponseSchema):
                 raise ValueError(
                     "An electricity invoice must specify electricity consumption."
                 )
-            if self.gas_consumption_smc is not None:
+            if self.gas_consumption_scm is not None:
                 raise ValueError(
                     "An electricity invoice must not specify gas consumption."
                 )
@@ -398,7 +400,7 @@ class InvoiceCreate(BaseResponseSchema):
 
         """
         if self.commodity_type == "gas":
-            if self.gas_consumption_smc is None:
+            if self.gas_consumption_scm is None:
                 raise ValueError("A gas invoice must specify gas consumption.")
             if self.electricity_consumption_kwh is not None:
                 raise ValueError(
@@ -502,7 +504,7 @@ class PaymentCreate(BaseResponseSchema):
             ValueError: If the payment date is set to a future date.
 
         """
-        if self.payment_date > datetime.date.today():
+        if self.payment_date > datetime.datetime.now(tz=datetime.timezone.utc).date():
             raise ValueError("Payment date can not be in the future.")
 
         return self
@@ -545,6 +547,33 @@ class CRMSupportTicketCreate(BaseResponseSchema):
     created_at: TicketCreationDateTime
     resolved_at: Optional[TicketResolutionDateTime] = None
     satisfaction_score: Optional[SatisfactionScore] = None
+
+    @field_validator("created_at", "resolved_at", mode="before")
+    @classmethod
+    def validate_ticket_datetime_tz_utc(
+        cls, value: Optional[datetime.datetime]
+    ) -> Optional[datetime.datetime]:
+        """Intercept and standardize incoming datetime fields to be UTC-aware.
+
+        This pre-validator runs before Pydantic's internal type parsing. It
+        processes the input value through `ensure_utc_aware` to guarantee that
+        any naive timestamp is assigned the UTC timezone and any aware timestamp
+        is correctly converted to UTC, preventing offset comparison errors.
+        Optional fields receiving None bypass stabilization.
+
+        Args:
+            value (Optional[datetime.datetime]): The raw input datetime object
+                provided for the field before validation, or None.
+
+        Returns:
+            Optional[datetime.datetime]: The standardized, UTC-aware datetime
+            object, or None if the input was missing.
+
+        """
+        if value is None:
+            return value
+
+        return ensure_utc_aware(value)
 
     @model_validator(mode="after")
     def creation_date_validation(self) -> Self:
@@ -635,6 +664,28 @@ class UserWebLoginCreate(BaseResponseSchema):
     login_timestamp: LoginTimestamp
     ip_address: IpAddress
     device_type: DeviceType
+
+    @field_validator("login_timestamp", mode="before")
+    @classmethod
+    def validate_login_datetime_tz_utc(
+        cls, value: datetime.datetime
+    ) -> datetime.datetime:
+        """Intercept and standardize the login timestamp to be UTC-aware.
+
+        This pre-validator runs before Pydantic's internal type parsing. It
+        processes the incoming user login timestamp through `ensure_utc_aware`
+        to guarantee that login events are logged with consistent UTC metadata,
+        preventing timezone mismatches during authentication auditing.
+
+        Args:
+            value (datetime.datetime): The raw login datetime object provided
+                before validation.
+
+        Returns:
+            datetime.datetime: The standardized, UTC-aware login datetime object.
+
+        """
+        return ensure_utc_aware(value)
 
     @model_validator(mode="after")
     def login_timestamp_validation(self) -> Self:
