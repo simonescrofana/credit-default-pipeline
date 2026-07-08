@@ -49,21 +49,57 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 
 ```text
 insolvency_prediction_project/
-├── .github/workflows/
-│   └── main.yml
+├── .dvc/
+│   ├── .gitignore
+│   └── config
+├── .github/
+│   ├── workflows/
+│   │   └── main.yml
+│   └── pull_request_template.md
 ├── agent/
 ├── database/
+│   ├── migrations/
+│   │   ├── README
+│   │   ├── env.py
+│   │   └── script.py.mako
+│   ├── __init__.py
+│   ├── base.py
+│   ├── connection.py
+│   ├── credit-default-database.sql
+│   └── models.py
+├── docs/
+│   ├── images/
+│   │   └── credit-default-database.pdf
+│   ├── schema/
+│   │   └── database_structure.sql
 ├── dbt_project/
 ├── pipeline/
 ├── schemas/
+│   ├── __init__.py
+│   ├── base.py
+│   ├── models_validation.py
+│   └── types.py
 ├── tests/
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── test_database_connection.py
+│   ├── test_database_models.py
+│   ├── test_timezone_utils.py
+│   └── test_validation_models.py
 ├── ui/
+├── utils/
+│   ├── __init__.py
+│   ├── logging_utils.py
+│   └── timezone_utils.py
+├── .dvcignore
 ├── .env
 ├── .env.example
 ├── .gitignore
+├── .python-version
 ├── config.py
 ├── docker-compose.yml
 ├── LICENSE
 ├── pyproject.toml
-└── README.md
+├── README.md
+└── uv.lock
 ```
