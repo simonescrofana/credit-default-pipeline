@@ -4,6 +4,7 @@ This module configures the SQLAlchemy runtime connection and orchestrates
 the execution of database migrations in both offline and online modes.
 It dynamically injects database credentials from the application settings
 to avoid hardcoding sensitive information.
+
 """
 
 from logging.config import fileConfig

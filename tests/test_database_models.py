@@ -1,4 +1,4 @@
-"""Database Schema Validation and Constraint Test Suite.
+"""Database schema validation and relational constraint integration tests.
 
 This module provides a comprehensive suite of integration tests to validate
 the database schema, table relationships, and integrity constraints using pytest
@@ -24,6 +24,7 @@ Tested Constraints & Features:
     * Schema Definitions: Presence of database indices, unique constraints
       (single and multi-column), non-nullable column rules, and restricted
       deletion behaviors.
+
 """
 
 import datetime
@@ -49,12 +50,15 @@ from database.models import (
 
 @pytest.fixture(scope="function")
 def db_session() -> Iterator[Session]:
-    """Create a SQLite database for schema validation.
+    """Provide an isolated, in-memory SQLite session with enforced foreign keys.
 
-    The function creates a session in a SQLite database which allows
-    to create databases stored in RAM, ina serverless way. This makes
-    the test function executable without any further installation and
-    faster than its PostgreSQL version.
+    Creates a transient, serverless SQLite database initialized with the full
+    declarative schema metadata. This setup ensures high-speed execution and
+    zero-dependency environments for database testing compared to PostgreSQL.
+
+    Yields:
+        Session: Active SQLAlchemy session bound to the clean memory engine.
+
     """
     engine = create_engine("sqlite:///:memory:")
 
@@ -78,10 +82,17 @@ def db_session() -> Iterator[Session]:
 
 
 def test_database_references(db_session) -> None:
-    """Test the creation of the entire database structure.
+    """Asserts relational mapping integrity across all schema entities.
 
-    This function tests the creation of the table and the
-    references present among the tables in the database.
+    Seeds a complete, interdependent B2B operational graph (Company, Contract,
+    Financial Statement, Invoice, Payment, Ticket, and Login records) ensuring that
+    foreign key cascades, composite keys, and back-populations resolve without
+    perturbation through SQLAlchemy ORM relationship navigation paths.
+
+    Raises:
+        AssertionError: If any structural relationship path fails to hydrate or
+            deviates from the expected cardinality.
+
     """
     company = Company(
         vat_number="01234567890",
@@ -186,11 +197,17 @@ def test_database_references(db_session) -> None:
 
 
 def test_commodity_data_constraints(db_session) -> None:
-    """Test for required columns and gas_meter_class data constraint.
+    """Asserts commodity conditional data constraints.
 
-    This function tests if the constraints on required columns (not null) are
-    working and if the column gas_meter_class of energy_contract table accepts
-    only valid data.
+    Validates that the database prevents the insertion of an energy contract when
+    conditional required fields are omitted. Specifically, ensures that a 'gas'
+    commodity type contract without a defined pressure level triggers a native
+    `gas_fields_required_constraint` violation.
+
+    Raises:
+        AssertionError: If the database flushes the invalid contract configuration
+            successfully without raising an `IntegrityError`.
+
     """
     company = Company(
         vat_number="11111111111",
@@ -217,10 +234,17 @@ def test_commodity_data_constraints(db_session) -> None:
 
 
 def test_chronological_constraints(db_session) -> None:
-    """Test for chronological constraints.
+    """Asserts contract chronological date constraints.
 
-    This function tests if the chronological constraints are refusing impossible dates.
-    It tests the date constraint for the energy_contracts table.
+    Validates chronological constraint enforcement on the `energy_contracts` table.
+    Ensures that generating a record where the `termination_date` precedes the
+    `activation_date` successfully triggers a native database-level
+    `contract_date_chronology_constraint` violation.
+
+    Raises:
+        AssertionError: If the database flushes the invalid temporal sequence
+            without raising an `IntegrityError`.
+
     """
     company = Company(
         vat_number="22222222222",
@@ -247,11 +271,17 @@ def test_chronological_constraints(db_session) -> None:
 
 
 def test_inclusion_constraints(db_session) -> None:
-    """Test for the inclusion constraints.
+    """Asserts that the database rejects invalid categorical string variables.
 
-    This function tests if the inclusion constraints are excluding wrong
-    or/and impossible data. It checks the constraint on the industry_sector column
-    of companies table.
+    Validates inclusion constraint enforcement (`IN` clauses) on the `companies`
+    table. Verifies that attempting to register an enterprise with an unlisted
+    macroeconomic activity sector (e.g., 'money_laundering') correctly triggers
+    a native database-level `industry_sector_constraint` violation.
+
+    Raises:
+        AssertionError: If the database flushes the invalid industry string
+            successfully without raising an `IntegrityError`.
+
     """
     company = Company(
         vat_number="66666666666",
@@ -295,11 +325,18 @@ def test_range_constraint(db_session) -> None:
 
 
 def test_composite_foreign_key_constraint(db_session) -> None:
-    """Test for the composite foreign key.
+    """Asserts composite foreign key matching across business domains.
 
-    This function tests the composite foreign key of the database, which relates the
-    contract_id and commodity_type columns of invoices table with the columns
-    id and commodity_type of energy_contracts table.
+    Validates that the database enforces strict entity alignment by linking the
+    `contract_id` and `commodity_type` multi-columns of the `invoices` table to
+    their parent definitions in the `energy_contracts` table. Verifies that mismatching
+    the parent contract profile (e.g., billing gas data on an active electricity
+    contract) correctly breaks integrity invariants, throwing a `IntegrityError`.
+
+    Raises:
+        AssertionError: If the database engine flushes the domain mismatch
+            successfully without throwing a foreign key violation.
+
     """
     company = Company(
         vat_number="44444444444",
@@ -340,11 +377,17 @@ def test_composite_foreign_key_constraint(db_session) -> None:
 
 
 def test_mathematical_integrity_constraint(db_session) -> None:
-    """Test for the mathematical integrity constraint.
+    """Asserts database invoice arithmetic constraints.
 
-    This function tests the mathematical constraint preesent in the database. It checks
-    if the constraint that, for each invoice, the cost without taxes summed to the taxes
-    gives exactly the total cost of the invoice.
+    Validates financial algebraic balance on the `invoices` table. Ensures that
+    attempting to record an invoice where the sum of `amount_excluding_tax` and
+    `tax_amount` does not mathematically match the specified `total_amount`
+    correctly triggers an operational `invoice_amount_integrity_constraint` failure.
+
+    Raises:
+        AssertionError: If the database engine persists the asymmetric financial amounts
+            without throwing an accounting integrity exception.
+
     """
     company = Company(
         vat_number="55555555555",
@@ -385,10 +428,17 @@ def test_mathematical_integrity_constraint(db_session) -> None:
 
 
 def test_database_indices_exist(db_session) -> None:
-    """Test for database indices.
+    """Verifies the programmatic existence of database operational indices.
 
-    This function tests if the operational indices are well defined, checks if the
-    indexed columns are correct, and verifies the descending order constraint.
+    Leverages the SQLAlchemy inspection utility to query the active database schema
+    metadata for the `user_web_logins` table. Enforces that optimization structures,
+    specifically the chronological reverse-ordered tracking index
+    (`idx_logins_user_timeline`), are properly defined and deployed.
+
+    Raises:
+        AssertionError: If the expected index name is missing from the table's
+            structural index registry.
+
     """
     inspector = inspect(db_session.get_bind())
     indices = inspector.get_indexes("user_web_logins")
@@ -398,10 +448,18 @@ def test_database_indices_exist(db_session) -> None:
 
 
 def test_single_column_unique_constraint(db_session) -> None:
-    """Test unique constraints.
+    """Asserts schema unique constraint enforcement.
 
-    This function tests if the unique contraints are working, including both single- and
-    multi-column unique indices.
+    Validates unique invariant enforcement across the schema on two layers:
+    1. Single-column: Verifies that attempting to register two distinct companies
+       with the same VAT number (`vat_number`) throws an `IntegrityError`.
+    2. Entity identity: Verifies that forcing overlapping primary identifiers (`id`)
+       on the `energy_contracts` table breaks structural unique constraints.
+
+    Raises:
+        AssertionError: If the database flushes duplicate unique fields or overlapping
+            identities successfully without raising an `IntegrityError`.
+
     """
     company_1 = Company(
         vat_number="66666666666",
@@ -467,10 +525,17 @@ def test_single_column_unique_constraint(db_session) -> None:
 
 
 def test_nullable_false_constraint(db_session) -> None:
-    """Test for not null constraints.
+    """Asserts that non-nullable columns trigger integrity errors when omitted.
 
-    This function tests if the database throws an error if a not nullable value is
-    missing.
+    Validates the strict enforcement of `nullable=False` constraints across the schema.
+    Verifies that attempting to persist an entity missing an obligatory attribute
+    (e.g., a `Company` record with `legal_name=None`) is correctly intercepted by
+    the database engine, raising a native `IntegrityError`.
+
+    Raises:
+        AssertionError: If the database engine flushes the incomplete entity
+            successfully without throwing a NOT NULL violation.
+
     """
     invalid_company = Company(
         vat_number="88888888888",
@@ -486,10 +551,17 @@ def test_nullable_false_constraint(db_session) -> None:
 
 
 def test_on_delete_restriction_behavior(db_session) -> None:
-    """Test on delete constraints.
+    """Asserts that relational delete constraints protect child records from orphanhood.
 
-    This functions tests if the database follows the deletion constraints
-    (no action/restrict). It checks the deletion behaviour on orphan invoice.
+    Validates cascading behavioral invariants across linked tables. Verifies that
+    attempting to delete an active `EnergyContract` record while it still possesses
+    associated child `Invoice` entities forces an integrity violation, as the system
+    blocks the contract identity from becoming null on historical ledger records.
+
+    Raises:
+        AssertionError: If the database engine drops the parent entity successfully
+            without raising a NOT NULL foreign key constraint error.
+
     """
     company = Company(
         vat_number="99999999999",

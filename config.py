@@ -1,10 +1,11 @@
-"""Configuration module for the software.
+"""Application configuration and environment variable validation.
 
-This module, based on Pydantic Settings defines the validation rules for each
-environment variable required by the software to work. It configures the
-following services:
-    * PostgreSQL
-    * Logfire
+Defines the centralized configuration schema using Pydantic Settings. This
+module manages validation rules for environment variables required by the
+application, specifically orchestrating service configurations for:
+    * PostgreSQL (database connectivity)
+    * Logfire (telemetry and observability)
+
 """
 
 from typing import Annotated
@@ -17,26 +18,13 @@ SecretPassword = Annotated[SecretStr, Field(description="Protected secret passwo
 
 
 class Settings(BaseSettings):
-    """Manager of the configuration settings.
+    """Application configuration manager.
 
-    It scans the system environment (specially the .env file) to load and to validate
-    the required setting variables for each service requiring configuration.
+    Orchestrates the loading and validation of environment variables via `.env`
+    files. This class serves as the central source of truth for service
+    configurations, including PostgreSQL connection parameters and Logfire
+    telemetry credentials.
 
-    Services:
-
-        * PostgreSQL:
-        Attributes:
-            * POSTGRES_USER (str): Username for PostgreSQL authentication.
-            * POSTGRES_PASSWORD (SecretStr): Protected secret user's password.
-            * POSTGRES_DB (str): Name of the relational database.
-            * POSTGRES_PORT (int): Port relative to the PostgreSQL service.
-            Default: 5432.
-            * POSTGRES_HOST (str): Network host for the database. Default: "localhost".
-
-        * Logfire:
-        Attributes:
-            * LOGFIRE_TOKEN (str): secret API key for writing tokens (logs) on
-            Logfire dashboard.
     """
 
     model_config = SettingsConfigDict(

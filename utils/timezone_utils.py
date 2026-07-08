@@ -18,10 +18,10 @@ import datetime
 def ensure_utc_aware(dt: datetime.datetime) -> datetime.datetime:
     """Guarantee that a datetime object is offset-aware and set to UTC.
 
-    This function standardizes temporal identifiers by inspecting their timezone
-    metadata. If the input datetime is naive (lacks timezone information), it
-    implicitly assigns the UTC jet lag. If the input is already aware (has
-    a different timezone), it converts the timestamp linearly to UTC.
+    Inspects the input `datetime` metadata. If the object is naive (lacks
+    timezone info), it assigns the UTC timezone. If the object is already
+    offset-aware, it converts the timestamp to UTC, preserving the absolute
+    moment in time.
 
     Args:
         dt (datetime.datetime): The datetime object to be standardized.

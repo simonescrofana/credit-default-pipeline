@@ -1,5 +1,7 @@
-"""Test suite for the entire pipeline.
+"""Initializes the testing environment for absolute import resolution.
 
-This module initializes the testing environment and allows pytest to
-properly discover and resolve absolute imports across the project structure.
+Enables the `pytest` test discovery mechanism to treat the directory as a
+Python package, ensuring seamless resolution of absolute imports across the
+entire project structure during test execution.
+
 """

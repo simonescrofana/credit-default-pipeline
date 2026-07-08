@@ -1,9 +1,12 @@
-"""Tests for the relational database layer.
+"""Database infrastructure integration test suite.
 
-This script tests, with pytest, the functions in the following
-scripts:
-    *connection.py:
-        tests the connection to the PostgreSQL database.
+This module consolidates connection robustness, session generation stability,
+and resource teardown compliance tests across the pipeline infrastructure.
+
+Modules tested:
+    database.connection: Manages PostgreSQL network reachability, engine setup,
+        and transaction session lifecycles.
+
 """
 
 import pytest
@@ -14,9 +17,15 @@ from database.connection import get_db
 
 
 def test_db_connection() -> None:
-    """Test connection to PostgreSQL database.
+    """Verifies successful connection and minimal query execution on the database.
 
-    The function tests the connection asking a simple "SELECT 1" statement.
+    Extracts an active operational session from the database generator and
+    executes a fundamental compliance statement (`SELECT 1`) to validate
+    network reachability, credentials, and basic engine readiness.
+
+    Raises:
+        AssertionError: If the execution scalar response deviates from 1.
+
     """
     db_generator = get_db()
     db_session = next(db_generator)
@@ -27,10 +36,17 @@ def test_db_connection() -> None:
 
 
 def test_get_db_raises_and_closes_on_error() -> None:
-    """Test on closure of connection in error case.
+    """Verifies that the database generator correctly context-closes on raised errors.
 
-    The function tests the correct closure of the database Local Session
-    when an error occurs.
+    Validates the robustness of the session lifetime manager by injecting a
+    `RuntimeError` directly into the active generator. Enforces that the underling
+    `try/finally` structure catches the perturbation, triggers teardown operations,
+    and terminates orderly by raising a `StopIteration` on subsequent steps.
+
+    Attributes:
+        db_generator: Instantiated database session generator under context analysis.
+        db_session: Extracted operational engine session under validation.
+
     """
     db_generator = get_db()
     db_session = next(db_generator)

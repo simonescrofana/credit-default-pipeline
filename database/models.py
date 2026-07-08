@@ -1,41 +1,42 @@
-"""Data Models Architecture Module for Credit Default Pipeline.
+"""Data models architecture for the credit default prediction pipeline.
 
-This module defines the Core OLTP (OnLine Transaction Processing) database schema
-using SQLAlchemy 2.0 Declarative Mapping. The database architecture is designed
-from the perspective of a large Utility Company providing electricity and gas services
-to corporate clients (B2B).
+This module defines the core OLTP (OnLine Transaction Processing) database schema
+using SQLAlchemy 2.0 Declarative Mapping. The database architecture models a
+large utility company providing electricity and gas services to corporate
+B2B clients.
 
 The schema serves as the primary operational data store, capturing demographic,
-financial, contract-level, and multi-layered behavioral data. The collected signals
-form the historical and real-time basis for advanced alternative credit scoring
-and automated corporate insolvency prediction (Machine Learning lifecycle).
+financial, contract-level, and multi-layered behavioral telemetry. These signals
+form the historical and real-time basis for alternative credit scoring and
+automated corporate insolvency prediction within the machine learning lifecycle.
 
-Operational Perimeter and Table Topology:
-    - Companies: Core registry capturing B2B customer demographics, entity state,
-      and structural industry sectors.
-    - Financial Statements: Official historical balance sheets mapping the traditional
-      financial stability profile (revenue, leverage, liquidity) of the enterprises.
-    - Energy Contracts: Technical and market dimensions of energy supply, tracking
-      activation cycles, capacity parameters, and utility-specific meter classes.
-    - Invoices: Transactional accounting records detailing continuous energy
-      consumption, billing splits, and immediate aging balances.
-    - Payments: High-granularity behavior tracking execution status, payment methods,
-      and settlement failures (early-warning default indicators).
-    - CRM Support Tickets: Non-financial behavioral telemetry representing customer
-      friction, resolution times, and operational administration disputes.
-    - User Web Logins: Appended digital engagement signals mapping customer operational
-      liveness and real-time platform interaction patterns.
+The operational perimeter encompasses seven core corporate data dimensions:
+    Companies: Core registry capturing B2B customer demographics, operational
+        states, and standardized economic activity sectors.
+    Financial Statements: Annual balance sheets mapping traditional financial
+        stability profiles including revenue, leverage, and liquidity metrics.
+    Energy Contracts: Technical and market dimensions of energy supply tracking
+        activation cycles, capacity parameters, and utility meter classes.
+    Invoices: Transactional accounting records detailing continuous energy
+        consumption, billing splits, and immediate aging balances.
+    Payments: High-granularity transactional tracking mapping payment methods,
+        settlement execution, and anomalies used as early default indicators.
+    CRM Support Tickets: Non-financial behavioral telemetry capturing customer
+        friction, resolution performance, and operational disputes.
+    User Web Logins: Digital engagement signals mapping real-time corporate user
+        liveness and platform interaction patterns.
 
-Design Patterns and Implementation Standards:
-    - Strong typing using modern SQLAlchemy `Mapped[...]` and `mapped_column()`.
-    - Domain constraints and logical cross-field dependencies enforced via native
-      database-level CheckConstraints.
-    - Multi-column optimized B-Tree indexing and compound constraints for
+Implementation Design Patterns:
+    * Strong typing using modern SQLAlchemy `Mapped[...]` and `mapped_column()`.
+    * Domain constraints and logical cross-field dependencies enforced via
+      native database-level `CheckConstraints`.
+    * Multi-column optimized B-Tree indexing and compound constraints for
       high-throughput operational ingestion.
-    - Advanced indexing patterns, including compound descending timelines on temporal
-      vectors to optimize immediate application state retrieval.
-    - Transaction-level integrity safety via DEFERRABLE INITIALLY IMMEDIATE foreign
-      keys, allowing programmatic isolation during automated bulk-seeding operations.
+    * Advanced indexing patterns, including compound descending timelines on
+      temporal vectors to optimize application state retrieval.
+    * Transaction-level integrity safety via `DEFERRABLE INITIALLY IMMEDIATE`
+      foreign keys, isolating execution during automated bulk-seeding routines.
+
 """
 
 import datetime
@@ -63,15 +64,26 @@ from database.base import Base
 
 
 class Company(Base):
-    """Table to store companies' data.
+    """Represents the 'companies' table within the database.
 
-    This class specifies the 'companies' table, storing data about the companies.
-    In particular, the table contains the columns: 'id' number identifying
-    the companies, 'vat_number' associated to the company, 'legal_name' of
-    the company, 'legal_form' (s.r.l., S.p.A.,...) of the company, 'industry_sector'
-    of the company, 'foundation_date' of the company, 'registered_office_region'
-    locating the company and 'is_active' column specifying if the company is
-    still active today.
+    This model stores core administrative and registration data for simulated
+    corporate entities, ensuring industry sector integrity and valid historical
+    foundation dates via database constraints.
+
+    Attributes:
+        id: Unique identifier for the company (BigInteger with SQLite fallback).
+        vat_number: 11-character unique tax registration number.
+        legal_name: Official registered name of the corporate entity.
+        legal_form: Legal structure of the company (e.g., S.r.l., S.p.A.).
+        industry_sector: Economic sector, constrained to pre-defined categories.
+        foundation_date: Historical date when the company was established.
+        registered_office_region: Geographical region of the registered office.
+        is_active: Flag indicating whether the entity is currently operational.
+        contracts: List of associated energy contracts.
+        financial_statements: Historical financial records for the company.
+        support_tickets: CRM support tickets raised by or linked to the entity.
+        logins: Recorded web platform login events for company users.
+
     """
 
     __tablename__ = "companies"
@@ -124,18 +136,30 @@ class Company(Base):
 
 
 class EnergyContract(Base):
-    """Table to store energy contracts' data.
+    """Represents the 'energy_contracts' table within the database.
 
-    This class specifies the 'energy_contracts' table, storing data about
-    the energy contracts. In particular, the table contains the columns:
-    'id' number identifying the contract, 'company_id' associated to the company
-    buying energy, 'commodity_type' specifying if the company is buying electricity
-    or gas, 'market_type' that can be regulated or deregulated, 'voltage_level' and
-    'pressure_level' dividing the companies in three groups based on the quantity
-    of energy consumed, 'power_committed_kw' and 'gas_meter_class' specifying in
-    detail the energy that the companies are going to consume, 'activation_date'
-    of the contract, 'termination_date' of the contract (if it is terminated) and
-    'contract_status' specifying the status of the contract.
+    This model manages the supply utility agreements (electricity or gas) linked
+    to corporate entities. It enforces rigorous database-level constraints to Ensure
+    data integrity across conditional fields specific to each commodity type, as well
+    as contract states and chronological validity.
+
+    Attributes:
+        id: Unique identifier for the contract (BigInteger with SQLite fallback).
+        company_id: Foreign key linking the contract to its associated company.
+        commodity_type: Type of energy vehicle provided ('electricity' or 'gas').
+        market_type: Regulatory environment governing the contract
+            ('regulated' or 'deregulated').
+        voltage_level: Supply voltage tier for electricity ('low', 'medium', 'high').
+        pressure_level: Distribution pressure tier for gas ('low', 'medium', 'high').
+        power_committed_kw: Contracted active power capacity allocation in kilowatts.
+        gas_meter_class: Meter sizing classification prefix (e.g., 'G4', 'G10').
+        activation_date: Effective calendar date when service delivery begins.
+        termination_date: Optional closure date if the contract is no longer active.
+        contract_status: Current operational standing ('active',
+            'suspended', 'terminated').
+        company: ORM relationship to the parent Company entity.
+        invoices: ORM relationship to the historical list of associated Invoices.
+
     """
 
     __tablename__ = "energy_contracts"
@@ -248,15 +272,26 @@ class EnergyContract(Base):
 
 
 class FinancialStatement(Base):
-    """Table to store companies' financial data.
+    """Represents the 'financial_statements' table within the database.
 
-    This class specifies the 'financial_statements' table, storing data about
-    the financial data of companies. In particular, the table contains the columns:
-    'company_id' identifying the company, ' fiscal_year' specifying the reference year
-    of the related data, 'total_revenue', 'net_income', 'total_debt', 'liquidity_cash'
-    and 'share_capital' for the related company for the related fiscal year and
-    'ebitda' (Earnings Before Interest, Taxes, Depreciation and Amortization) to measure
-    financial performances.
+    This model stores annual corporate financial metrics and performance records
+    for companies. It tracks core balance sheet and income statement indicators
+    using a composite primary key consisting of the company identifier and the
+    target fiscal year to maintain historical records.
+
+    Attributes:
+        company_id: Foreign key and composite primary key linking to the Company.
+        fiscal_year: Calendar year of the financial reporting period
+            (composite primary key).
+        total_revenue: Gross top-line earnings generated during the fiscal year.
+        net_income: Bottom-line profit or loss after all expenses, taxes, and interest.
+        total_debt: Aggregate outstanding short-term and
+            long-term financial liabilities.
+        liquidity_cash: Total available cash reserves and liquid equivalents.
+        share_capital: Total funding provided by shareholders/owners.
+        ebitda: Earnings Before Interest, Taxes, Depreciation, and Amortization.
+        company: ORM relationship to the parent Company entity.
+
     """
 
     __tablename__ = "financial_statements"
@@ -288,18 +323,30 @@ class FinancialStatement(Base):
 
 
 class Invoice(Base):
-    """Table to store single invoices' data.
+    """Represents the 'invoices' table within the database.
 
-    This class specifies the 'invoices' table, storing data about
-    the single energy invoices. In particular, the table contains the columns:
-    'id' of the invoice, 'contract_id' which is contract related to the invoice,
-    'commodity_type' indicating the type of energy (electricity, gas), 'invoice_number'
-    which is the unique identification number of the invoice (not the id in the database
-    which is the first column), 'electricity_consumption_kwh' and 'gas_consumption_scm'
-    reporting the actual energy consumed by the company for the period specified by
-    the invoice, 'amount_excluding_tax', 'tax_amount' and 'total_amount' specifying
-    the costs of the invoices, 'issue_date' and 'due_date' for the invoice and
-    'invoice_status' indicating if the invoice is unpaid, paid, overdue or cancelled.
+    This model manages individual billing statements issued under specific energy
+    contracts. It enforces rigorous financial integrity through database-level total
+    sum validations and strictly seals resource consumption metrics to match the linked
+    contract's commodity vehicle type (electricity or gas).
+
+    Attributes:
+        id: Unique internal sequential identifier for the invoice (BigInteger).
+        contract_id: Foreign key core constituent linking to the target contract.
+        commodity_type: Foreign key validation tier classifying the utility vehicle.
+        invoice_number: Alphanumeric unique billing sequence identifier.
+        electricity_consumption_kwh: Active power usage during the billing cycle in kWh.
+        gas_consumption_scm: Natural gas usage volume during the billing cycle
+            in Standard Cubic Meters.
+        amount_excluding_tax: Net base cost configuration before taxation.
+        tax_amount: Calculated tax value application (e.g., VAT equivalent).
+        total_amount: Gross billing total, constrained to equal net plus tax amount.
+        issue_date: Documentation issuance calendar date.
+        due_date: Contractual payment deadline date.
+        invoice_status: Lifecycle standing ('unpaid', 'paid', 'overdue', 'cancelled').
+        contract: ORM relationship to the parent EnergyContract entity.
+        payments: ORM relationship tracking historical Payment entries for this invoice.
+
     """
 
     __tablename__ = "invoices"
@@ -393,15 +440,26 @@ class Invoice(Base):
 
 
 class Payment(Base):
-    """Table to store payments data.
+    """Represents the 'payments' table within the database.
 
-    This class specifies the 'payments' table, storing data about payments.
-    In particular, the table contains the columns: 'id' identifying the payment,
-    'invoice_id' identifying the invoice related to the specific payment,
-    'payment_date', 'amount_paid', 'payment_method' (direct debit, bank transfer,
-    credit card, postal bulletin or cash), 'transaction_reference' for payment
-    identification (not the 'id' which is related to the database) and
-    'payment_status' (pending, completed, failed or refunded).
+    This model tracks financial transactions executed against issued invoices.
+    It enforces strict database-level integration constraints regarding payment
+    methods, transaction statuses, chronological compliance, and monetary amounts
+    to guarantee accounting precision.
+
+    Attributes:
+        id: Unique internal sequential identifier for the payment record (BigInteger).
+        invoice_id: Foreign key linking the transaction to its target Invoice.
+        payment_date: Calendar date when the payment transaction occurred.
+        amount_paid: Total monetary value processed, constrained
+            to be strictly positive.
+        payment_method: Transaction channel used ('direct_debit', 'bank_transfer',
+            'credit_card', 'postal_bulletin', 'cash').
+        transaction_reference: Unique external alphanumeric gateway identifier code.
+        payment_status: Current transactional lifecycle state ('pending', 'completed',
+            'failed', 'refunded').
+        invoice: ORM relationship to the associated parent Invoice entity.
+
     """
 
     __tablename__ = "payments"
@@ -458,16 +516,24 @@ class Payment(Base):
 
 
 class CRMSupportTicket(Base):
-    """Table to store CRM support tickets data.
+    """Represents the 'crm_support_tickets' table within the database.
 
-    This class specifies the 'crm_support_tickets' table, storing data about
-    tickets opened by the customer support. In particular, the table contains the
-    columns: 'id' identifying the ticket, 'company_id' to specify which company opened
-    the ticket, 'ticket_category' specifying the category of the ticket (billing,
-    technical, onboarding or commercial), 'created_at' specifying the datetime at which
-    the ticket has been opened, 'resolved_at' containing the datetime at which the
-    ticket has been resolved (if it has already happened) and 'satisfaction_score'
-    storing data about the user's feedback.
+    This model manages customer operations and assistance requests. It tracks
+    ticket lifecycles from creation to resolution, enforcing conditional database
+    constraints to ensure a satisfaction score can only be recorded for resolved
+    incidents, alongside strict timeline progression.
+
+    Attributes:
+        id: Unique internal sequential identifier for the support ticket (BigInteger).
+        company_id: Foreign key linking the ticket to the issuing Company entity.
+        ticket_category: Nature of the request ('billing', 'technical',
+            'onboarding', 'commercial').
+        created_at: Datetime with timezone metadata capturing ticket initialization.
+        resolved_at: Optional datetime with timezone capturing final resolution.
+        satisfaction_score: Optional customer feedback rating,
+            constrained between 1 and 5.
+        company: ORM relationship to the associated parent Company entity.
+
     """
 
     __tablename__ = "crm_support_tickets"
@@ -525,14 +591,24 @@ class CRMSupportTicket(Base):
 
 
 class UserWebLogin(Base):
-    """Table to store data about the users' web logins.
+    """Represents the 'user_web_logins' table within the database.
 
-    This class specifies the 'user_web_logins' table, storing data about
-    the web logins done from users. In particular, the table contains the columns:
-    'id' identifying the login, 'company_id' specifying the company related to the
-    user's login, 'user_id' and 'ip_address' identifying the user, 'login_timestamp'
-    storing the datetime of the login and 'device_type' to store information about
-    the device type used by the user to log in.
+    This model functions as an audit trail for user authentication events on the
+    web platform. It tracks login times, source network addresses, and access channels,
+    utilizing custom indices to optimize chronological user timeline queries.
+
+    Attributes:
+        id: Unique internal sequential identifier for the login event (BigInteger).
+        company_id: Foreign key linking the login event to the user's parent Company.
+        user_id: Unique identifier for the specific user executing the authentication.
+        login_timestamp: Datetime with timezone metadata capturing when the
+            login occurred.
+        ip_address: Network address of the client (INET type with a 45-character
+            string fallback).
+        device_type: Client classification medium used ('desktop', 'mobile',
+            'tablet', 'api').
+        company: ORM relationship to the associated parent Company entity.
+
     """
 
     __tablename__ = "user_web_logins"

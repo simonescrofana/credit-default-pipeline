@@ -1,8 +1,9 @@
-"""Configuration moduel for logs.
+"""Configures application logging and export telemetry pipelines.
 
-This module configures logging and logfire exporting a function
-`setup_logging()` taking the log level as parameter (default is INFO).
-It allows logging during the execution of single scripts.
+This module initializes the standard library `logging` system and configures
+the `logfire` exporter. It exposes `setup_logging()` to standardize log output
+formats and telemetry ingestion for standalone execution environments.
+
 """
 
 import logging
@@ -13,10 +14,15 @@ from config import settings
 
 
 def setup_logging(log_level: str = "INFO") -> None:
-    """Configure the logs of the scripts.
+    """Configure the global logging system and telemetry exporter.
 
-    Calling this function only in the __main__ esnures the configuration of
-    logging when scripts are not imported or executed by pytest or FastAPI.
+    Initializes `logging.basicConfig` with a standardized output format and
+    attaches both a local stream handler and the `logfire` logging handler.
+
+    Args:
+        log_level (str): The logging threshold level (e.g., "DEBUG", "INFO").
+            Defaults to "INFO".
+
     """
     LOG_FORMAT = "%(asctime)s - %(levelname)s - [%(name)s] - %(message)s"
     DATE_FORMAT = "%Y-%m-%d %H:%M:%S"

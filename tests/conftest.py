@@ -1,10 +1,12 @@
-"""Test configuration module.
+"""Test configuration and global instrumentation module.
 
-This module configures global aspects that every test has to
-consider. This scripts contains the configuration of
-Logfire for test logging including the configuration of the tools
-used in tests, which are:
-    * SQLAlchemy.
+This module initializes global configurations, logging providers, and subsystem
+instrumentation required across the test suite execution.
+
+Supported tools and integrations:
+    * Logfire: Distributed tracing and structured test logging execution.
+    * SQLAlchemy: Database engine query monitoring and ORM instrumentation.
+
 """
 
 import logging

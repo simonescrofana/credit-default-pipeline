@@ -1,10 +1,15 @@
-"""Module for connecting SQLAlchemy to PostgreSQL.
+"""Module for configuring the SQLAlchemy connection to PostgreSQL.
 
-This module uses the script in config.py to import secretely
-the credentials required to build the URL to the PostgreSQL database.
-It creates the SQLAlchemy engine for the database and
-it gives a generator of SQLAlchemy local sessions to work with the
-database.
+This module initializes the SQLAlchemy database engine using credentials
+injected from the application settings. It provides a session factory for
+generating local database sessions and exposes a context generator to manage
+the session lifecycle safely.
+
+Attributes:
+    engine: The SQLAlchemy Engine instance managing the database connection pool.
+    SessionLocal: The SQLAlchemy sessionmaker factory for creating new Session
+        instances.
+
 """
 
 import logging
@@ -31,13 +36,20 @@ SessionLocal = sessionmaker(
 
 
 def get_db() -> Iterator[Session]:
-    """Give a SQLAlchemy Session to work.
+    """Provide a transactional database session context.
 
-    It provides a SQLAlchemy Session to work with the PostgreSQL
-    database connected thanks to the engine defined above.
-    The function provides a generator of Session and the try finally
-    statement ensures the closure of the connection when the work
-    on this Local Session is done.
+    Yields a SQLAlchemy Session connected to the PostgreSQL database.
+    The try-finally block guarantees that the local session is reliably
+    closed after the caller finishes operations, even if exceptions occur
+    during processing.
+
+    Yields:
+        Iterator[Session]: A SQLAlchemy database session object.
+
+    Raises:
+        Exception: Re-raises any exception encountered during the session
+            lifecycle after logging the failure.
+
     """
     logger.debug("Opening a new database Local Session")
     db = SessionLocal()
