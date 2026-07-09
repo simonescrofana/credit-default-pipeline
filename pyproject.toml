@@ -38,4 +38,5 @@ pythonpath = ["."]
 omit = [
     "**/__init__.py",
     "config.py",
+    "utils/logging_utils.py"
 ]
