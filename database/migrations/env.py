@@ -10,7 +10,7 @@ to avoid hardcoding sensitive information.
 from logging.config import fileConfig
 
 from alembic import context
-from base import Base
+from database.base import Base
 from sqlalchemy import engine_from_config, pool
 
 from config import settings
@@ -68,7 +68,7 @@ def run_migrations_online() -> None:
 
     """
     configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = settings.POSTGRES_URL
+    configuration["sqlalchemy.url"] = settings.database_url
 
     connectable = engine_from_config(
         configuration,
