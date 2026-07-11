@@ -53,7 +53,6 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
-    Numeric,
     String,
     text,
 )
@@ -61,6 +60,7 @@ from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.base import Base
+from database.types import ExactNumeric, dialect_aware_check
 
 
 class Company(Base):
@@ -178,7 +178,7 @@ class EnergyContract(Base):
     market_type: Mapped[str] = mapped_column(String(11), nullable=False)
     voltage_level: Mapped[Optional[str]] = mapped_column(String(6))
     pressure_level: Mapped[Optional[str]] = mapped_column(String(6))
-    power_committed_kw: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    power_committed_kw: Mapped[Optional[Decimal]] = mapped_column(ExactNumeric(10, 2))
     gas_meter_class: Mapped[Optional[str]] = mapped_column(String(5))
     activation_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     termination_date: Mapped[Optional[datetime.date]] = mapped_column(Date)
@@ -302,12 +302,12 @@ class FinancialStatement(Base):
         primary_key=True,
     )
     fiscal_year: Mapped[int] = mapped_column(Integer, primary_key=True)
-    total_revenue: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
-    net_income: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
-    total_debt: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
-    liquidity_cash: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
-    share_capital: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
-    ebitda: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    total_revenue: Mapped[Decimal] = mapped_column(ExactNumeric(15, 2), nullable=False)
+    net_income: Mapped[Decimal] = mapped_column(ExactNumeric(15, 2), nullable=False)
+    total_debt: Mapped[Decimal] = mapped_column(ExactNumeric(15, 2), nullable=False)
+    liquidity_cash: Mapped[Decimal] = mapped_column(ExactNumeric(15, 2), nullable=False)
+    share_capital: Mapped[Decimal] = mapped_column(ExactNumeric(15, 2), nullable=False)
+    ebitda: Mapped[Decimal] = mapped_column(ExactNumeric(15, 2), nullable=False)
 
     company: Mapped["Company"] = relationship(back_populates="financial_statements")
 
@@ -362,14 +362,14 @@ class Invoice(Base):
     commodity_type: Mapped[str] = mapped_column(String(11), nullable=False)
     invoice_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     electricity_consumption_kwh: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(10, 2)
+        ExactNumeric(10, 2)
     )
-    gas_consumption_scm: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    gas_consumption_scm: Mapped[Optional[Decimal]] = mapped_column(ExactNumeric(10, 2))
     amount_excluding_tax: Mapped[Decimal] = mapped_column(
-        Numeric(15, 2), nullable=False
+        ExactNumeric(15, 2), nullable=False
     )
-    tax_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
-    total_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    tax_amount: Mapped[Decimal] = mapped_column(ExactNumeric(15, 2), nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(ExactNumeric(15, 2), nullable=False)
     issue_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     due_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     invoice_status: Mapped[str] = mapped_column(
@@ -393,7 +393,14 @@ class Invoice(Base):
             "due_date >= issue_date", name="invoice_date_chronology_constraint"
         ),
         CheckConstraint(
-            "total_amount = (amount_excluding_tax + tax_amount)",
+            dialect_aware_check(
+                pg_expr="total_amount = (amount_excluding_tax + tax_amount)",
+                sqlite_expr=(
+                    "ABS(CAST(total_amount AS REAL) - "
+                    "(CAST(amount_excluding_tax AS REAL) + "
+                    "CAST(tax_amount AS REAL))) < 0.005"
+                ),
+            ),
             name="invoice_amount_integrity_constraint",
         ),
         CheckConstraint(
@@ -475,7 +482,7 @@ class Payment(Base):
         nullable=False,
     )
     payment_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
-    amount_paid: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    amount_paid: Mapped[Decimal] = mapped_column(ExactNumeric(15, 2), nullable=False)
     payment_method: Mapped[str] = mapped_column(String(25), nullable=False)
     transaction_reference: Mapped[Optional[str]] = mapped_column(
         String(100), unique=True

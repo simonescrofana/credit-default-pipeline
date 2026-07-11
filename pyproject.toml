@@ -7,7 +7,9 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.18.5",
     "dvc[gdrive]>=3.67.1",
+    "faker>=40.28.1",
     "logfire[sqlalchemy]>=4.37.0",
+    "numpy>=2.5.1",
     "psycopg2-binary>=2.9.12",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
@@ -19,6 +21,7 @@ dependencies = [
 [tool.ruff]
 line-length = 88
 target-version = "py313"
+extend-exclude = ["database/migrations/versions/*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "D"]
@@ -39,4 +42,12 @@ omit = [
     "**/__init__.py",
     "config.py",
     "utils/logging_utils.py"
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "return dialect.type_descriptor\\(self.impl\\)",
+    "return element._pg_expr",
+    "if __name__ == .__main__.:",
+    "if k.contract_status == \"terminated\"" # dead code at the moment
 ]

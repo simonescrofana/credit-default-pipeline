@@ -28,15 +28,13 @@ Tested Constraints & Features:
 """
 
 import datetime
-from collections.abc import Iterator
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, event, inspect
+from sqlalchemy import inspect
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from database.base import Base
 from database.models import (
     Company,
     CRMSupportTicket,
@@ -48,40 +46,7 @@ from database.models import (
 )
 
 
-@pytest.fixture(scope="function")
-def db_session() -> Iterator[Session]:
-    """Provide an isolated, in-memory SQLite session with enforced foreign keys.
-
-    Creates a transient, serverless SQLite database initialized with the full
-    declarative schema metadata. This setup ensures high-speed execution and
-    zero-dependency environments for database testing compared to PostgreSQL.
-
-    Yields:
-        Session: Active SQLAlchemy session bound to the clean memory engine.
-
-    """
-    engine = create_engine("sqlite:///:memory:")
-
-    # This function bypasses a SQLite limit and allows fk constraints.
-    @event.listens_for(engine, "connect")
-    def set_sqlite_pragma(dbapi_connection, connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-    Base.metadata.create_all(engine)
-
-    TestingSessionLocal = sessionmaker(bind=engine)
-    session = TestingSessionLocal()
-
-    yield session
-
-    session.close()
-    Base.metadata.drop_all(engine)
-    engine.dispose()
-
-
-def test_database_references(db_session) -> None:
+def test_database_references(db_session: Session) -> None:
     """Asserts relational mapping integrity across all schema entities.
 
     Seeds a complete, interdependent B2B operational graph (Company, Contract,
@@ -196,7 +161,7 @@ def test_database_references(db_session) -> None:
     assert len(queried_company.logins) == 1
 
 
-def test_commodity_data_constraints(db_session) -> None:
+def test_commodity_data_constraints(db_session: Session) -> None:
     """Asserts commodity conditional data constraints.
 
     Validates that the database prevents the insertion of an energy contract when
@@ -233,7 +198,7 @@ def test_commodity_data_constraints(db_session) -> None:
         db_session.flush()
 
 
-def test_chronological_constraints(db_session) -> None:
+def test_chronological_constraints(db_session: Session) -> None:
     """Asserts contract chronological date constraints.
 
     Validates chronological constraint enforcement on the `energy_contracts` table.
@@ -270,7 +235,7 @@ def test_chronological_constraints(db_session) -> None:
         db_session.flush()
 
 
-def test_inclusion_constraints(db_session) -> None:
+def test_inclusion_constraints(db_session: Session) -> None:
     """Asserts that the database rejects invalid categorical string variables.
 
     Validates inclusion constraint enforcement (`IN` clauses) on the `companies`
@@ -296,7 +261,7 @@ def test_inclusion_constraints(db_session) -> None:
         db_session.flush()
 
 
-def test_range_constraint(db_session) -> None:
+def test_range_constraint(db_session: Session) -> None:
     """Test on range constraint.
 
     This function tests if the range constraint (BETWEEN) refuses wrong values for
@@ -324,7 +289,7 @@ def test_range_constraint(db_session) -> None:
         db_session.flush()
 
 
-def test_composite_foreign_key_constraint(db_session) -> None:
+def test_composite_foreign_key_constraint(db_session: Session) -> None:
     """Asserts composite foreign key matching across business domains.
 
     Validates that the database enforces strict entity alignment by linking the
@@ -376,7 +341,7 @@ def test_composite_foreign_key_constraint(db_session) -> None:
         db_session.flush()
 
 
-def test_mathematical_integrity_constraint(db_session) -> None:
+def test_mathematical_integrity_constraint(db_session: Session) -> None:
     """Asserts database invoice arithmetic constraints.
 
     Validates financial algebraic balance on the `invoices` table. Ensures that
@@ -427,7 +392,7 @@ def test_mathematical_integrity_constraint(db_session) -> None:
         db_session.flush()
 
 
-def test_database_indices_exist(db_session) -> None:
+def test_database_indices_exist(db_session: Session) -> None:
     """Verifies the programmatic existence of database operational indices.
 
     Leverages the SQLAlchemy inspection utility to query the active database schema
@@ -447,7 +412,7 @@ def test_database_indices_exist(db_session) -> None:
     assert expected_index_name in index_names
 
 
-def test_single_column_unique_constraint(db_session) -> None:
+def test_single_column_unique_constraint(db_session: Session) -> None:
     """Asserts schema unique constraint enforcement.
 
     Validates unique invariant enforcement across the schema on two layers:
@@ -524,7 +489,7 @@ def test_single_column_unique_constraint(db_session) -> None:
         db_session.flush()
 
 
-def test_nullable_false_constraint(db_session) -> None:
+def test_nullable_false_constraint(db_session: Session) -> None:
     """Asserts that non-nullable columns trigger integrity errors when omitted.
 
     Validates the strict enforcement of `nullable=False` constraints across the schema.
@@ -550,7 +515,7 @@ def test_nullable_false_constraint(db_session) -> None:
         db_session.flush()
 
 
-def test_on_delete_restriction_behavior(db_session) -> None:
+def test_on_delete_restriction_behavior(db_session: Session) -> None:
     """Asserts that relational delete constraints protect child records from orphanhood.
 
     Validates cascading behavioral invariants across linked tables. Verifies that

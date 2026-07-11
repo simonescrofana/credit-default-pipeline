@@ -10,10 +10,19 @@ to avoid hardcoding sensitive information.
 from logging.config import fileConfig
 
 from alembic import context
-from database.base import Base
 from sqlalchemy import engine_from_config, pool
 
 from config import settings
+from database.base import Base
+from database.models import (  # noqa: F401
+    Company,
+    CRMSupportTicket,
+    EnergyContract,
+    FinancialStatement,
+    Invoice,
+    Payment,
+    UserWebLogin,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -48,7 +57,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = settings.database_url
     context.configure(
         url=url,
         target_metadata=target_metadata,
