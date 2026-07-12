@@ -10,6 +10,7 @@ dependencies = [
     "faker>=40.28.1",
     "logfire[sqlalchemy]>=4.37.0",
     "numpy>=2.5.1",
+    "pandas>=3.0.3",
     "psycopg2-binary>=2.9.12",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
