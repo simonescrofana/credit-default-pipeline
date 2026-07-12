@@ -58,24 +58,24 @@ insolvency_prediction_project/
 │   └── pull_request_template.md
 ├── agent/
 ├── analytics/
-│   ├── ingestion/
-│   │   ├── __init__.py
-│   │   ├── extract.py
-│   │   └── restore.py
 │   ├── dbt_project/
 │   │   └── models/
 │   │       ├── staging/
 │   │       ├── intermediate/
 │   │       └── marts/
+│   ├── ingestion/
+│   │   ├── __init__.py
+│   │   ├── extract.py
+│   │   └── restore.py
 │   └── __init__.py
 ├── database/
 │   ├── migrations/
 │   │   ├── versions/
 │   │   │   ├── 4c84a2bf5287_feat_create_database_structure.py
 │   │   │   ├── 7f2797ec0404_feat_create_database_structure.py
-│   │   │   └──c1cf595229f7_feat_create_database_structure_really_.py
-│   │   ├── README
+│   │   │   └── c1cf595229f7_feat_create_database_structure_really_.py
 │   │   ├── env.py
+│   │   ├── README
 │   │   └── script.py.mako
 │   ├── __init__.py
 │   ├── base.py
@@ -99,13 +99,26 @@ insolvency_prediction_project/
 │   ├── profiles.py
 │   └── seed.py
 ├── tests/
+│   ├── analytics/
+│   │   ├── ingestion/
+│   │   │   ├── __init__.py
+│   │   │   └── test_extract.py
+│   │   └── __init__.py
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── test_connection.py
+│   │   └── test_models.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   └── test_models_validation.py
+│   ├── simulation/
+│   │   ├── __init__.py
+│   │   └── test_seed.py
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── test_timezone_utils.py
 │   ├── __init__.py
-│   ├── conftest.py
-│   ├── test_database_connection.py
-│   ├── test_database_models.py
-│   ├── test_simulation.py
-│   ├── test_timezone_utils.py
-│   └── test_validation_models.py
+│   └── conftest.py
 ├── ui/
 ├── utils/
 │   ├── __init__.py
