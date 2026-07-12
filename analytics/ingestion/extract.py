@@ -28,14 +28,14 @@ from database.models import (
 
 logger = logging.getLogger(__name__)
 
-DATA_REPO = "../data/raw"
+DATA_REPO = "data/raw"
 
 
 def build_file_name(file_name: str) -> str:
     """Resolve the absolute path for a data file within the repository.
 
     Combines the input file name with the static target directory pathway
-    defined in DATA_REPO ('../data/raw').
+    defined in DATA_REPO ('root/data/raw').
 
     Args:
         file_name (str): The target file name or relative path component.
