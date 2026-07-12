@@ -5,13 +5,23 @@ description = "Pipeline end-to-end for risk's prediction of company insolvency."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "alembic>=1.18.5",
+    "dvc[gdrive]>=3.67.1",
+    "faker>=40.28.1",
+    "logfire[sqlalchemy]>=4.37.0",
+    "numpy>=2.5.1",
+    "psycopg2-binary>=2.9.12",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "sqlalchemy>=2.0.51",
 ]
 
 [tool.ruff]
 line-length = 88
 target-version = "py313"
+extend-exclude = ["database/migrations/versions/*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "D"]
@@ -23,3 +33,21 @@ ignore = [
 [tool.ruff.format]
 docstring-code-format = true
 docstring-code-line-length = 72
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.coverage.run]
+omit = [
+    "**/__init__.py",
+    "config.py",
+    "utils/logging_utils.py"
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "return dialect.type_descriptor\\(self.impl\\)",
+    "return element._pg_expr",
+    "if __name__ == .__main__.:",
+    "if k.contract_status == \"terminated\"" # dead code at the moment
+]
