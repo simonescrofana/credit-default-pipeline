@@ -57,8 +57,15 @@ insolvency_prediction_project/
 │   │   └── main.yml
 │   └── pull_request_template.md
 ├── agent/
+├── analytics/
+│   ├── extract.py
+│   └── restore.py
 ├── database/
 │   ├── migrations/
+│   │   ├── versions/
+│   │   │   ├── 4c84a2bf5287_feat_create_database_structure.py
+│   │   │   ├── 7f2797ec0404_feat_create_database_structure.py
+│   │   │   └──c1cf595229f7_feat_create_database_structure_really_.py
 │   │   ├── README
 │   │   ├── env.py
 │   │   └── script.py.mako
@@ -66,24 +73,29 @@ insolvency_prediction_project/
 │   ├── base.py
 │   ├── connection.py
 │   ├── credit-default-database.sql
-│   └── models.py
+│   ├── models.py
+│   └── types.py
 ├── docs/
 │   ├── images/
 │   │   └── credit-default-database.pdf
-│   ├── schema/
-│   │   └── database_structure.sql
-├── dbt_project/
+│   └── schema/
+│       └── database_structure.sql
 ├── pipeline/
 ├── schemas/
 │   ├── __init__.py
 │   ├── base.py
 │   ├── models_validation.py
 │   └── types.py
+├── simulation/
+│   ├── __init__.py
+│   ├── profiles.py
+│   └── seed.py
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py
 │   ├── test_database_connection.py
 │   ├── test_database_models.py
+│   ├── test_simulation.py
 │   ├── test_timezone_utils.py
 │   └── test_validation_models.py
 ├── ui/
@@ -96,6 +108,7 @@ insolvency_prediction_project/
 ├── .env.example
 ├── .gitignore
 ├── .python-version
+├── alembic.ini
 ├── config.py
 ├── docker-compose.yml
 ├── LICENSE
