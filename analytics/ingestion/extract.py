@@ -8,8 +8,9 @@ raw data repository directory.
 
 import logging
 import os
-
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from sqlalchemy import select
 
 from database.base import Base
@@ -46,7 +47,7 @@ def build_file_name(file_name: str) -> str:
 
 
 def extract_table_data(
-    db_table_name: str, sqlalchemy_model_name: type[Base], chunk_size: int = 100000
+    db_table_name: str, sqlalchemy_model: type[Base], chunk_size: int = 100000
 ) -> None:
     """Stream database table records into a partitioned Parquet file.
 
@@ -71,29 +72,29 @@ def extract_table_data(
         os.makedirs(DATA_REPO)
         logger.info("Created destination repository: %s", DATA_REPO)
 
+    writer = None
     try:
         session = next(get_db())
-        query = select(sqlalchemy_model_name)
+        query = select(sqlalchemy_model)
 
         logger.info("Dividing data in chunks of %s row...", chunk_size)
         chunks = pd.read_sql_query(sql=query, con=session.bind, chunksize=chunk_size)
 
-        is_first_chunk = True
         total_rows = 0
         OUTPUT_FILE = build_file_name(db_table_name + ".parquet")
 
         for i, chunk in enumerate(chunks):
-            if is_first_chunk:
-                chunk.to_parquet(OUTPUT_FILE, index=False, append=False)
-                is_first_chunk = False
-            else:
-                chunk.to_parquet(OUTPUT_FILE, index=False, append=True)
-
             chunk_rows = len(chunk)
-            total_rows += chunk_rows
-
             if chunk_rows == 0:
                 logger.warning("Chunk number %d is empty.", i + 1)
+                continue
+
+            table = pa.Table.from_pandas(chunk, preserve_index=False)
+            if writer is None:
+                writer = pq.ParquetWriter(OUTPUT_FILE, table.schema)
+            writer.write_table(table)
+
+            total_rows += chunk_rows
             logger.info(
                 "Successfully extracted data from block number %d"
                 "(%d rows, for a cumulative amount of %d rows)",
@@ -116,6 +117,10 @@ def extract_table_data(
     except Exception as e:
         logger.error("Critical error during data extraction: %s", e, exc_info=True)
         raise
+
+    finally:
+        if writer is not None:
+            writer.close()
 
 
 if __name__ == "__main__":
