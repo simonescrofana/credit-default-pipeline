@@ -8,6 +8,7 @@ raw data repository directory.
 
 import logging
 import os
+
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -56,8 +57,7 @@ def extract_table_data(
 
     Args:
         db_table_name (str): Name of the source database table used for file naming.
-        sqlalchemy_model_name (type[Base]): The mapped SQLAlchemy ORM model class
-            to query.
+        sqlalchemy_model (type[Base]): The mapped SQLAlchemy ORM model class to query.
         chunk_size (int): Numerical limit of rows processed per memory buffer segment.
             Defaults to 100000.
 
@@ -67,10 +67,6 @@ def extract_table_data(
 
     """
     logger.info("Starting data extraction from %s table...", db_table_name)
-
-    if not os.path.exists(DATA_REPO):
-        os.makedirs(DATA_REPO)
-        logger.info("Created destination repository: %s", DATA_REPO)
 
     writer = None
     try:
@@ -83,7 +79,11 @@ def extract_table_data(
         total_rows = 0
         OUTPUT_FILE = build_file_name(db_table_name + ".parquet")
 
+        # has_chunks is a flag required by tests to verify log reports when the
+        # iterator logic broke for some reason
+        has_chunks = False
         for i, chunk in enumerate(chunks):
+            has_chunks = True
             chunk_rows = len(chunk)
             if chunk_rows == 0:
                 logger.warning("Chunk number %d is empty.", i + 1)
@@ -103,7 +103,9 @@ def extract_table_data(
                 total_rows,
             )
 
-        if total_rows == 0:
+        if not has_chunks or total_rows == 0:
+            if not has_chunks:
+                logger.warning("Chunk number 1 is empty.")
             logger.warning("Extraction completed but no data was retrieved.")
         else:
             logger.info(
@@ -147,6 +149,10 @@ if __name__ == "__main__":
 
     setup_logging("INFO")
     logger.info("Starting data extracion from the transational database...")
+
+    if not os.path.exists(DATA_REPO):
+        os.makedirs(DATA_REPO)
+        logger.info("Created destination repository: %s", DATA_REPO)
 
     for table, model in zip(DB_TABLES, MODEL_TABLES):
         extract_table_data(table, model, chunk_size=100000)
