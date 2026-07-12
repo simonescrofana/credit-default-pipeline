@@ -9,7 +9,7 @@ An end-to-end, production-grade MLOps and Data Engineering pipeline designed to 
 This project is actively developed to simulate an enterprise-grade AI infrastructure deployment. 
 
 * **[x] Phase 1:** Infrastructure Setup (Docker, PostgreSQL, GitHub Actions).
-* **[ ] Phase 2:** OLTP Core Banking Database Setup & Schema Design (SQLAlchemy ORM + Alembic Migrations).
+* **[x] Phase 2:** OLTP Core Banking Database Setup & Schema Design (SQLAlchemy ORM + Alembic Migrations).
 * **[ ] Phase 3:** MLOps Data Versioning (DVC Data Tracking) & OLAP Warehouse Transformation (dbt Core, Star Schema).
 * **[ ] Phase 4:** Machine Learning Benchmark Suite (Sklearn, XGBoost, PyTorch) & Experiment Tracking (MLflow).
 * **[ ] Phase 5:** Explainable AI (SHAP) Integration & Agentic GenAI Layer (LangGraph + ChromaDB).
@@ -58,8 +58,16 @@ insolvency_prediction_project/
 │   └── pull_request_template.md
 ├── agent/
 ├── analytics/
-│   ├── extract.py
-│   └── restore.py
+│   ├── ingestion/
+│   │   ├── __init__.py
+│   │   ├── extract.py
+│   │   └── restore.py
+│   ├── dbt_project/
+│   │   └── models/
+│   │       ├── staging/
+│   │       ├── intermediate/
+│   │       └── marts/
+│   └── __init__.py
 ├── database/
 │   ├── migrations/
 │   │   ├── versions/
