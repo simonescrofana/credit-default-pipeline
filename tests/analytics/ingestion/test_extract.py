@@ -41,7 +41,7 @@ def test_data_extraction(db_session: Session) -> None:
 
     extract_table_data("company", Company)
 
-    assert os.path.exists("../data/raw/company.parquet")
+    assert os.path.exists("data/raw/company.parquet")
 
 
 def test_data_extraction_database_failure(db_session: Session) -> None:
