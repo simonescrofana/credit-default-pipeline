@@ -126,3 +126,30 @@ def db_session() -> Iterator[Session]:
             Base.metadata.drop_all(test_engine)
 
         test_engine.dispose()
+
+
+@pytest.fixture(scope="function", autouse=True)
+def override_get_db(db_session: Session) -> Iterator[None]:
+    """Override the application's database dependency with a test session.
+
+    Dynamically patch the `get_db` generator function inside the database
+    connection module to yield the provided test session, ensuring all
+    application routes use the same isolated database context during a test.
+    Restore the original function after the test completes.
+
+    Yields:
+        None: Control is yielded back to the execution of the test function.
+
+    """
+
+    def _get_db_override() -> Iterator[Session]:
+        yield db_session
+
+    import database.connection as connection_module
+
+    original = connection_module.get_db
+    connection_module.get_db = _get_db_override
+
+    yield
+
+    connection_module.get_db = original

@@ -20,7 +20,7 @@ from analytics.ingestion.extract import extract_table_data
 from database.models import Company
 
 
-@patch("analytics.ingestion.extract.get_db")
+@patch("analytics.ingestion.extract.connection.get_db")
 def test_data_extraction(mock_get_db, db_session: Session) -> None:
     """Verify successful data extraction and Parquet file generation.
 
@@ -66,7 +66,7 @@ def test_data_extraction_database_failure(db_session: Session) -> None:
             extract_table_data("company", Company)
 
 
-@patch("analytics.ingestion.extract.get_db")
+@patch("analytics.ingestion.extract.connection.get_db")
 def test_data_extraction_writer_closes_on_error(
     mock_get_db, db_session: Session
 ) -> None:
@@ -127,7 +127,7 @@ def test_extract_table_data_empty_chunk(
     def mock_get_db():
         yield db_session
 
-    with patch("analytics.ingestion.extract.get_db", mock_get_db):
+    with patch("analytics.ingestion.extract.connection.get_db", mock_get_db):
         with caplog.at_level(logging.WARNING, logger="analytics.ingestion.extract"):
             extract_table_data("company_empty_chunk", Company)
 

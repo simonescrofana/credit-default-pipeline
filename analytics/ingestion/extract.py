@@ -14,8 +14,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from sqlalchemy import select
 
+from database import connection
 from database.base import Base
-from database.connection import get_db
 from database.models import (
     Company,
     CRMSupportTicket,
@@ -71,7 +71,7 @@ def extract_table_data(
     writer = None
     session = None
     try:
-        session = next(get_db())
+        session = next(connection.get_db())
         query = select(sqlalchemy_model)
 
         logger.info("Dividing data in chunks of %s row...", chunk_size)
