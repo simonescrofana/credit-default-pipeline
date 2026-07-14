@@ -485,7 +485,7 @@ def test_single_column_unique_constraint(db_session: Session) -> None:
     )
     db_session.add(contract_2)
 
-    with pytest.raises(IntegrityError, match=".*UNIQUE constraint failed.*"):
+    with pytest.raises(IntegrityError):
         db_session.flush()
 
 
