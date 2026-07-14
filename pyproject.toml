@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.18.5",
+    "dbt-core>=1.11.12",
+    "dbt-postgres>=1.10.2",
     "dvc>=3.67.1",
     "faker>=40.28.1",
     "logfire[sqlalchemy]>=4.37.0",
