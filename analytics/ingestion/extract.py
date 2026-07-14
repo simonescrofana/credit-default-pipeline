@@ -156,10 +156,10 @@ if __name__ == "__main__":
     setup_logging("INFO")
     logger.info("Starting data extracion from the transational database...")
 
-#    the repo creation now is inside the function itself
-#    if not os.path.exists(DATA_REPO):
-#        os.makedirs(DATA_REPO)
-#        logger.info("Created destination repository: %s", DATA_REPO)
+    #    the repo creation now is inside the function itself
+    #    if not os.path.exists(DATA_REPO):
+    #        os.makedirs(DATA_REPO)
+    #        logger.info("Created destination repository: %s", DATA_REPO)
 
     for table, model in zip(DB_TABLES, MODEL_TABLES):
         extract_table_data(table, model, chunk_size=100000)
