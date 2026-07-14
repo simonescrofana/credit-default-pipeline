@@ -122,7 +122,7 @@ def db_session() -> Iterator[Session]:
                     conn.execute(
                         text(f"TRUNCATE TABLE {table.name} RESTART IDENTITY CASCADE;")
                     )
-        else:
+        elif not is_ci_environment:
             Base.metadata.drop_all(test_engine)
 
         test_engine.dispose()

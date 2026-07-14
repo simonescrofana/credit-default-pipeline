@@ -60,6 +60,26 @@ exclude_also = [
     "if k.contract_status == \"terminated\"", # dead code at the moment
     ".*if not is_sqlite",
     "if is_ci_environment:",
-    "test_engine = create_engine\\(\"sqlite:///:memory:\"\\)",
+    "elif not is_ci_environment:",
+    "global_engine = create_engine\\(\"sqlite:///:memory:\"\\)",
+    """test_engine = create_engine\\(\"sqlite:///:memory:\"\\)
+
+    @event.listens_for\\(test_engine, \"connect\"\\)
+    def set_sqlite_pragma\\(dbapi_connection, connection_record\\):
+        cursor = dbapi_connection.cursor\\(\\)
+        cursor.execute\\(\"PRAGMA foreign_keys=ON\"\\)
+        cursor.close\\(\\)
+
+    Base.metadata.create_all\\(test_engine\\)""",
     "def set_sqlite_pragma\\(dbapi_connection, connection_record\\):",
+    "engine = create_engine\\(DATABASE_URL, pool_pre_ping=True\\)",
+    """logger.info\\(
+        \"SQLite environment detected: \"
+        \"skipping Postgres update of sequence counters \\(ID\\)...\"
+    \\)""",
+    "if dialect.name == \"sqlite\":",
+    """def process_bind_param\\(
+        self, value: Optional\\[Decimal\\], dialect: Dialect
+    \\) -> Optional\\[Decimal | str\\]:""",
+    "return element._sqlite_expr",
 ]
