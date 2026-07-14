@@ -58,4 +58,4 @@ jobs:
         POSTGRES_DB: postgres_db
         LOGFIRE_TOKEN: "${{ secrets.LOGFIRE_TOKEN }}"
       run: |
-        uv run pytest --cov=. --cov-report=term-missing --cov-fail-under=90
+        uv run pytest --cov=. --cov-report=term-missing --cov-fail-under=95
