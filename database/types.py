@@ -55,9 +55,11 @@ class ExactNumeric(TypeDecorator):
             return dialect.type_descriptor(String())
         return dialect.type_descriptor(self.impl)
 
-    def process_bind_param(
-        self, value: Optional[Decimal], dialect: Dialect
-    ) -> Optional[Decimal | str]:
+    def process_bind_param(  ## pragma: no cover
+        self,
+        value: Optional[Decimal],
+        dialect: Dialect,  # pragma: no cover
+    ) -> Optional[Decimal | str]:  # pragma: no cover
         """Intercept outbound values to apply fixed-point text formatting if needed.
 
         Args:

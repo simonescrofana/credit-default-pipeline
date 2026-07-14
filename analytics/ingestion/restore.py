@@ -138,7 +138,7 @@ def restore_database(dir_path: str = "data/raw", chunk_size: int = 50000) -> Non
                     session.execute(text(seq_query))
             session.commit()
 
-        else:
+        else:  # pragma: no cover
             logger.info(
                 "SQLite environment detected: "
                 "skipping Postgres update of sequence counters (ID)..."

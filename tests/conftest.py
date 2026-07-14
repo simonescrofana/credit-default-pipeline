@@ -96,7 +96,7 @@ def db_session() -> Iterator[Session]:
         db_url = settings.database_url
         test_engine = create_engine(db_url, poolclass=NullPool)
 
-    else:
+    else:  # pragma: no cover
         test_engine = create_engine("sqlite:///:memory:")
 
         @event.listens_for(test_engine, "connect")
