@@ -81,6 +81,7 @@ def extract_table_data(
 
         total_rows = 0
         OUTPUT_FILE = build_file_name(db_table_name + ".parquet")
+        os.makedirs(DATA_REPO, exist_ok=True)
 
         # has_chunks is a flag required by tests to verify log reports when the
         # iterator logic broke for some reason
@@ -155,9 +156,10 @@ if __name__ == "__main__":
     setup_logging("INFO")
     logger.info("Starting data extracion from the transational database...")
 
-    if not os.path.exists(DATA_REPO):
-        os.makedirs(DATA_REPO)
-        logger.info("Created destination repository: %s", DATA_REPO)
+#    the repo creation now is inside the function itself
+#    if not os.path.exists(DATA_REPO):
+#        os.makedirs(DATA_REPO)
+#        logger.info("Created destination repository: %s", DATA_REPO)
 
     for table, model in zip(DB_TABLES, MODEL_TABLES):
         extract_table_data(table, model, chunk_size=100000)
