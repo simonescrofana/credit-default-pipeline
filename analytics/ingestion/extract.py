@@ -75,7 +75,7 @@ def extract_table_data(
         query = select(sqlalchemy_model)
 
         logger.info("Dividing data in chunks of %s row...", chunk_size)
-        chunks = pd.read_sql_query(sql=query, con=session.bind, chunksize=chunk_size)
+        chunks = pd.read_sql_query(sql=query, con=session.connection(), chunksize=chunk_size)
 
         total_rows = 0
         OUTPUT_FILE = build_file_name(db_table_name + ".parquet")
