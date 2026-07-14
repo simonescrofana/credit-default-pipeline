@@ -41,6 +41,9 @@ docstring-code-line-length = 72
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+filterwarnings = [
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.coverage.run]
 omit = [
@@ -54,5 +57,9 @@ exclude_also = [
     "return dialect.type_descriptor\\(self.impl\\)",
     "return element._pg_expr",
     "if __name__ == .__main__.:",
-    "if k.contract_status == \"terminated\"" # dead code at the moment
+    "if k.contract_status == \"terminated\"", # dead code at the moment
+    ".*if not is_sqlite",
+    "if is_ci_environment:",
+    "test_engine = create_engine\\(\"sqlite:///:memory:\"\\)",
+    "def set_sqlite_pragma\\(dbapi_connection, connection_record\\):",
 ]

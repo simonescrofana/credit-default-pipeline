@@ -69,6 +69,7 @@ def extract_table_data(
     logger.info("Starting data extraction from %s table...", db_table_name)
 
     writer = None
+    session = None
     try:
         session = next(get_db())
         query = select(sqlalchemy_model)
@@ -123,6 +124,8 @@ def extract_table_data(
     finally:
         if writer is not None:
             writer.close()
+        if session is not None:
+            session.close()
 
 
 if __name__ == "__main__":

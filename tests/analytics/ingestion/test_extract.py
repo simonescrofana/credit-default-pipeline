@@ -20,7 +20,8 @@ from analytics.ingestion.extract import extract_table_data
 from database.models import Company
 
 
-def test_data_extraction(db_session: Session) -> None:
+@patch("analytics.ingestion.extract.get_db")
+def test_data_extraction(mock_get_db, db_session: Session) -> None:
     """Verify successful data extraction and Parquet file generation.
 
     This test populates the database with a mock company entry, executes the
@@ -28,6 +29,8 @@ def test_data_extraction(db_session: Session) -> None:
     fetched and written as a Parquet file in the designated raw data directory.
 
     """
+    mock_get_db.return_value = iter([db_session])
+
     company = Company(
         vat_number="01234567890",
         legal_name="Acme Energy Consumer SPA",
@@ -37,7 +40,7 @@ def test_data_extraction(db_session: Session) -> None:
         is_active=True,
     )
     db_session.add(company)
-    db_session.flush()
+    db_session.commit()
 
     extract_table_data("company", Company)
 
@@ -63,16 +66,23 @@ def test_data_extraction_database_failure(db_session: Session) -> None:
             extract_table_data("company", Company)
 
 
-def test_data_extraction_writer_closes_on_error(db_session: Session) -> None:
+@patch("analytics.ingestion.extract.get_db")
+def test_data_extraction_writer_closes_on_error(
+    mock_get_db, db_session: Session
+) -> None:
     """Verify that ParquetWriter is explicitly closed even if write operations fail.
 
-    Ensures that resource cleanup inside the finally block is triggered when an
-    I/O or filesystem exception occurs mid-stream.
+    This test isolates the active database provider, mocks the ParquetWriter
+    instance to simulate a critical filesystem failure during streaming, and
+    asserts that the system robustly invokes resource cleanup in the finally block
+    before propagating the filesystem exception.
 
     Raises:
         OSError: Expected filesystem write failure simulated via mocking.
 
     """
+    mock_get_db.return_value = iter([db_session])
+
     company = Company(
         vat_number="99999999999",
         legal_name="Fail Test SRL",
@@ -92,7 +102,7 @@ def test_data_extraction_writer_closes_on_error(db_session: Session) -> None:
             "No space left on device"
         )
 
-        with pytest.raises(OSError):
+        with pytest.raises(OSError, match="No space left on device"):
             extract_table_data("company", Company)
 
         mock_writer_instance.close.assert_called_once()

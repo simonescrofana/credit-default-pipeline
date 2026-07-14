@@ -13,21 +13,30 @@ Attributes:
 """
 
 import logging
+import os
 from collections.abc import Iterator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from config import settings
 
 logger = logging.getLogger(__name__)
 
+is_ci_environment = os.getenv("GITHUB_ACTIONS") == "true"
+
 DATABASE_URL = settings.database_url
 
-# pool_pre_ping, on connection request, checks the connection
-# and re-creates it if it was broken
 logger.debug("Initializing SQLAlchemy engine with pool_pre_ping=True")
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+
+if is_ci_environment:
+    # pool_pre_ping, on connection request, checks the connection
+    # and re-creates it if it was broken
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, poolclass=NullPool)
+
+else:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 SessionLocal = sessionmaker(
     autoflush=False,  # avoids sending queries automatically
