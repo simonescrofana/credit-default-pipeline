@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('db_source', 'energy_contracts') }}
+    select * from {{ ref('energy_contracts_snapshot') }}
 ),
 
 transformed as (
@@ -15,10 +15,8 @@ transformed as (
         upper(trim(gas_meter_class)) as gas_meter_class,
         activation_date::date as activation_date,
         termination_date::date as termination_date,
-        case 
-            when termination_date is not null then (termination_date::date - activation_date::date)::int
-            else (current_date - activation_date::date)::int
-        end as contract_duration_days
+        dbt_valid_from,
+        dbt_valid_to
 
     from source
 )

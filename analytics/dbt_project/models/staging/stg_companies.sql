@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('db_source', 'companies') }}
+    select * from {{ ref('companies_snapshot') }}
 ),
 
 transformed as (
@@ -10,9 +10,10 @@ transformed as (
         upper(trim(legal_form)) as legal_form,
         lower(trim(industry_sector)) as industry_sector,
         foundation_date::date as foundation_date,
-        (current_date - foundation_date::date)::int as company_age_days,
         coalesce(trim(registered_office_region), 'unknown') as registered_office_region,
-        coalesce(is_active, true) as is_active
+        coalesce(is_active, true) as is_active,
+        dbt_valid_from,
+        dbt_valid_to
 
     from source
 )

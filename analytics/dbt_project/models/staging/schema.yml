@@ -2,19 +2,31 @@ version: 2
 
 models:
   - name: stg_companies
-    description: "Cleaned and standardized stage view of B2B companies."
+    description: "Cleaned and standardized stage view of B2B companies, sourced from companies_snapshot (SCD2 history: one row per historical version of each company)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+          config:
+            where: "dbt_valid_to IS NULL"
     columns:
       - name: company_id
-        description: "Primary key of the company, cast to BigInt."
+        description: "Business key of the company, cast to BigInt. NOT unique at this grain: stg_companies now sources from companies_snapshot (SCD2), so a company_id may appear once per historical version."
         tests:
-          - unique
           - not_null
 
       - name: vat_number
-        description: "11-character tax registration number."
+        description: "11-character tax registration number. NOT unique at this grain for the same reason as company_id (SCD2 history)."
         tests:
-          - unique
           - not_null
+
+      - name: dbt_valid_from
+        description: "Start of this row's validity window, sourced from the companies_snapshot SCD2 history."
+        tests:
+          - not_null
+
+      - name: dbt_valid_to
+        description: "End of this row's validity window, sourced from the companies_snapshot SCD2 history. NULL indicates the current version of the company."
 
       - name: legal_name
         description: "Legal name of the registered company."
@@ -42,32 +54,40 @@ models:
         tests:
           - not_null
 
-      - name: company_age_days
-        description: "Actual lifetime of the company expressed in days."
-        tests:
-          - not_null
-
       - name: is_active
         description: "Flag indicating if the company is still active or not."
         tests:
           - not_null
 
   - name: stg_energy_contracts
-    description: "Cleaned and standardized stage view of energy contracts."
+    description: "Cleaned and standardized stage view of energy contracts, sourced from energy_contracts_snapshot (SCD2 history: one row per historical version of each contract)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - contract_id
+          config:
+            where: "dbt_valid_to IS NULL"
     columns:
       - name: contract_id
-        description: "Primary key of the energy contract."
+        description: "Business key of the energy contract. NOT unique at this grain: stg_energy_contracts now sources from energy_contracts_snapshot (SCD2), so a contract_id may appear once per historical version (e.g. one row per contract_status change)."
         tests:
-          - unique
           - not_null
 
       - name: company_id
-        description: "Foreign key referencing the B2B company."
+        description: "Foreign key referencing the B2B company. Note: relationships checks value existence only, not a 1:1 grain match — both sides now carry SCD2 history."
         tests:
           - not_null
           - relationships:
               field: company_id
               to: ref('stg_companies')
+
+      - name: dbt_valid_from
+        description: "Start of this row's validity window, sourced from the energy_contracts_snapshot SCD2 history."
+        tests:
+          - not_null
+
+      - name: dbt_valid_to
+        description: "End of this row's validity window, sourced from the energy_contracts_snapshot SCD2 history. NULL indicates the current version of the contract."
 
       - name: commodity_type
         description: "Type of commodity provided."
@@ -92,11 +112,6 @@ models:
 
       - name: activation_date
         description: "Date when the energy supply contract started (must be >= 2000-01-01)."
-        tests:
-          - not_null
-
-      - name: contract_duration_days
-        description: "Days of contract duration; if the contract is not ended it is the time expressed in days from the activation date to the current date."
         tests:
           - not_null
 
