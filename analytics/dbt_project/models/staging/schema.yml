@@ -163,3 +163,194 @@ models:
         description: "Earnings Before Interest, Taxes, Depreciation, and Amortization."
         tests:
           - not_null
+
+  - name: stg_invoices
+    description: "Cleaned and validated stage view of billing invoices, ready for risk profiling."
+    columns:
+      - name: invoice_id
+        description: "Primary key of the invoice."
+        tests:
+          - unique
+          - not_null
+
+      - name: contract_id
+        description: "Foreign key referencing the associated energy contract."
+        tests:
+          - not_null
+          - relationships:
+              field: contract_id
+              to: ref('stg_energy_contracts')
+          - dbt_utils.relationships_where:
+              to: ref('stg_energy_contracts')
+              field: contract_id
+              from_condition: "commodity_type = commodity_type"
+
+      - name: invoice_number
+        description: "Unique alphanumeric business reference for the invoice."
+        tests:
+          - unique
+          - not_null
+
+      - name: commodity_type
+        description: "Commodity linked to the invoice."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['electricity', 'gas']
+
+      - name: invoice_status
+        description: "The payment/accounting status of the invoice."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['unpaid', 'paid', 'overdue', 'cancelled']
+
+      - name: amount_excluding_tax
+        description: "Taxable basis amount (must be >= 0)."
+        tests:
+          - not_null
+
+      - name: tax_amount
+        description: "Tax portion applied (must be >= 0)."
+        tests:
+          - not_null
+
+      - name: total_amount
+        description: "Total invoice amount (must equal amount_excluding_tax + tax_amount)."
+        tests:
+          - not_null
+
+      - name: issue_date
+        description: "Date the invoice was generated."
+        tests:
+          - not_null
+
+      - name: due_date
+        description: "Payment deadline (must be >= issue_date)."
+        tests:
+          - not_null
+
+      - name: payment_term_days
+        description: "Calculated payment term window in days (must be non-null)."
+        tests:
+          - not_null
+
+  - name: stg_payments
+    description: "Cleaned and standardized stage view of billing payments, integrated with payment delay features."
+    columns:
+      - name: payment_id
+        description: "Primary key of the payment."
+        tests:
+          - unique
+          - not_null
+
+      - name: invoice_id
+        description: "Foreign key referencing the associated invoice."
+        tests:
+          - not_null
+          - relationships:
+              field: invoice_id
+              to: ref('stg_invoices')
+
+      - name: transaction_reference
+        description: "Unique transaction identifier from the payment gateway."
+        tests:
+          - unique
+
+      - name: payment_method
+        description: "The payment method utilized by the customer."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['direct_debit', 'bank_transfer', 'credit_card', 'postal_bulletin', 'cash']
+
+      - name: payment_status
+        description: "Operational status of the payment transaction."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['pending', 'completed', 'failed', 'refunded']
+
+      - name: amount_paid
+        description: "The monetary amount processed in the payment (must be > 0)."
+        tests:
+          - not_null
+
+      - name: payment_date
+        description: "The date when the payment was processed (must be <= CURRENT_DATE)."
+        tests:
+          - not_null
+
+  - name: stg_crm_support_tickets
+    description: "Cleaned and standardized stage view of CRM support tickets, featuring engineered resolution speed metrics."
+    columns:
+      - name: ticket_id
+        description: "Primary key of the support ticket."
+        tests:
+          - unique
+          - not_null
+
+      - name: company_id
+        description: "Foreign key referencing the associated B2B company."
+        tests:
+          - not_null
+          - relationships:
+              field: company_id
+              to: ref('stg_companies')
+
+      - name: ticket_category
+        description: "The core operational department resolving the customer ticket."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['billing', 'technical', 'onboarding', 'commercial']
+
+      - name: satisfaction_score
+        description: "Feedback score left by the customer upon resolution (range: 1 to 5)."
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4, 5]
+
+      - name: created_at
+        description: "Timestamp of when the ticket was generated."
+        tests:
+          - not_null
+
+  - name: stg_user_web_logins
+    description: "Cleaned and standardized stage view of B2B platform user logins."
+    columns:
+      - name: login_id
+        description: "Primary key of the login event."
+        tests:
+          - unique
+          - not_null
+
+      - name: company_id
+        description: "Foreign key referencing the associated B2B company."
+        tests:
+          - not_null
+          - relationships:
+              field: company_id
+              to: ref('stg_companies')
+
+      - name: user_id
+        description: "Identifier of the specific user who performed the login."
+        tests:
+          - not_null
+
+      - name: login_timestamp
+        description: "Timestamp when the login occurred (must be <= CURRENT_TIMESTAMP)."
+        tests:
+          - not_null
+
+      - name: ip_address
+        description: "Client IP address (IPv4 or IPv6) cast to text."
+        tests:
+          - not_null
+
+      - name: device_type
+        description: "Device category used for the session."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['desktop', 'mobile', 'tablet', 'api']
