@@ -21,7 +21,7 @@ from database.models import Company
 
 
 @patch("analytics.ingestion.extract.connection.get_db")
-def test_data_extraction(mock_get_db, db_session: Session) -> None:
+def test_data_extraction(mock_get_db, db_session: Session, tmp_path) -> None:
     """Verify successful data extraction and Parquet file generation.
 
     This test populates the database with a mock company entry, executes the
@@ -42,9 +42,9 @@ def test_data_extraction(mock_get_db, db_session: Session) -> None:
     db_session.add(company)
     db_session.commit()
 
-    extract_table_data("company", Company)
+    extract_table_data("company", Company, output_dir=tmp_path)
 
-    assert os.path.exists("data/raw/company.parquet")
+    assert os.path.exists(tmp_path / "company.parquet")
 
 
 def test_data_extraction_database_failure(db_session: Session) -> None:
@@ -68,7 +68,7 @@ def test_data_extraction_database_failure(db_session: Session) -> None:
 
 @patch("analytics.ingestion.extract.connection.get_db")
 def test_data_extraction_writer_closes_on_error(
-    mock_get_db, db_session: Session
+    mock_get_db, db_session: Session, tmp_path
 ) -> None:
     """Verify that ParquetWriter is explicitly closed even if write operations fail.
 
@@ -103,7 +103,7 @@ def test_data_extraction_writer_closes_on_error(
         )
 
         with pytest.raises(OSError, match="No space left on device"):
-            extract_table_data("company", Company)
+            extract_table_data("company", Company, output_dir=str(tmp_path))
 
         mock_writer_instance.close.assert_called_once()
 

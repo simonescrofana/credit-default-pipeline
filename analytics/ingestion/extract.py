@@ -31,24 +31,29 @@ logger = logging.getLogger(__name__)
 DATA_REPO = "data/raw"
 
 
-def build_file_name(file_name: str) -> str:
+def build_file_name(file_name: str, output_dir: str = DATA_REPO) -> str:
     """Resolve the absolute path for a data file within the repository.
 
-    Combines the input file name with the static target directory pathway
-    defined in DATA_REPO ('root/data/raw').
+    Combines the input file name with the target directory pathway, defaulting
+    to the static repository location defined in DATA_REPO ('root/data/raw').
 
     Args:
         file_name (str): The target file name or relative path component.
+        output_dir (str): The destination directory for the resolved path.
+            Defaults to DATA_REPO, preserving the production extraction target.
 
     Returns:
         str: The fully resolved filesystem path inside the repository root.
 
     """
-    return os.path.join(DATA_REPO, file_name)
+    return os.path.join(output_dir, file_name)
 
 
 def extract_table_data(
-    db_table_name: str, sqlalchemy_model: type[Base], chunk_size: int = 100000
+    db_table_name: str,
+    sqlalchemy_model: type[Base],
+    chunk_size: int = 100000,
+    output_dir: str = DATA_REPO,
 ) -> None:
     """Stream database table records into a partitioned Parquet file.
 
@@ -60,6 +65,9 @@ def extract_table_data(
         sqlalchemy_model (type[Base]): The mapped SQLAlchemy ORM model class to query.
         chunk_size (int): Numerical limit of rows processed per memory buffer segment.
             Defaults to 100000.
+        output_dir (str): Destination directory for the extracted Parquet file.
+            Defaults to DATA_REPO. Override in tests (e.g. with pytest's tmp_path)
+            to avoid writing to -- and overwriting -- the real production output.
 
     Raises:
         Exception: Any upstream database connection fault or filesystem IO error
@@ -80,8 +88,8 @@ def extract_table_data(
         )
 
         total_rows = 0
-        OUTPUT_FILE = build_file_name(db_table_name + ".parquet")
-        os.makedirs(DATA_REPO, exist_ok=True)
+        OUTPUT_FILE = build_file_name(db_table_name + ".parquet", output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
         # has_chunks is a flag required by tests to verify log reports when the
         # iterator logic broke for some reason
