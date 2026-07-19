@@ -59,15 +59,96 @@ insolvency_prediction_project/
 ├── agent/
 ├── analytics/
 │   ├── dbt_project/
-│   │   └── models/
-│   │       ├── staging/
-│   │       ├── intermediate/
-│   │       └── marts/
+│   │   ├── analyses
+│   │   │   └── .gitkeep
+│   │   ├── macros
+│   │   │   └── generate_company_key.sql
+│   │   ├── models/
+│   │   │   ├── intermediate/
+│   │   │   │   ├── int_billing_trailing_90d.sql
+│   │   │   │   ├── int_companies_scd_resolved.sql
+│   │   │   │   ├── int_company_date_spine.sql
+│   │   │   │   ├── int_contracts_asof.sql
+│   │   │   │   ├── int_financial_asof.sql
+│   │   │   │   ├── int_insolvency_label.sql
+│   │   │   │   ├── int_logins_trailing.sql
+│   │   │   │   ├── int_tickets_trailing.sql
+│   │   │   │   └── schema.yml
+│   │   │   ├── marts/
+│   │   │   │   ├── dim_companies.sql
+│   │   │   │   ├── dim_date.sql
+│   │   │   │   ├── fct_company_credit_profile.sql
+│   │   │   │   └── schema.yml
+│   │   │   └── staging/
+│   │   │       ├── schema.yml
+│   │   │       ├── sources.yml
+│   │   │       ├── stg_companies.sql
+│   │   │       ├── stg_crm_support_tickets.sql
+│   │   │       ├── stg_energy_contracts.sql
+│   │   │       ├── stg_financial_statements.sql
+│   │   │       ├── stg_invoices.sql
+│   │   │       ├── stg_payments.sql
+│   │   │       └── stg_user_web_logins.sql
+│   │   ├── seeds/
+│   │   │   └── .gitkeep
+│   │   ├── snapshots/
+│   │   │   ├── companies_snapshot.sql
+│   │   │   └── energy_contracts_snapshot.sql
+│   │   ├── tests/
+│   │   │   ├── marts/
+│   │   │   │   ├── dim_companies/
+│   │   │   │   │   ├── dim_companies_no_overlapping_windows.sql
+│   │   │   │   │   └── dim_companies_single_current_version.sql
+│   │   │   │   ├── dim_date/
+│   │   │   │   │   └── dim_date_no_gaps.sql
+│   │   │   │   └── fct_company_credit_profile/
+│   │   │   │       ├── fct_company_key_temporal_correctness.sql
+│   │   │   │       ├── fct_no_dropped_spine_rows.sql
+│   │   │   │       └── fct_no_unexpected_nulls.sql
+│   │   │   └── intermediate/
+│   │   │       ├── int_billing_trailing_90d/
+│   │   │       │   ├── int_billing_trailing_90d_debt_ratio_match.sql
+│   │   │       │   ├── int_billing_trailing_90d_dpd_consistency.sql
+│   │   │       │   └── int_billing_trailing_90d_no_future_leakage.sql
+│   │   │       ├── int_companies_scd_resolved/
+│   │   │       │   ├── int_companies_scd_resolved_chronology.sql
+│   │   │       │   ├── int_companies_scd_resolved_expired_versions.sql
+│   │   │       │   └── int_companies_scd_resolved_leakage.sql
+│   │   │       ├── int_company_date_spine/
+│   │   │       │   ├── int_company_date_spine_no_dates_before_foundation.sql
+│   │   │       │   ├── int_company_date_spine_no_future_dates.sql
+│   │   │       │   ├── int_company_date_spine_np_gaps.sql
+│   │   │       │   └── int_company_date_spine_respects_valid_to.sql
+│   │   │       ├── int_contracts_asof/
+│   │   │       │   ├── int_contracts_asof_count_flag_consistency.sql
+│   │   │       │   └── int_contracts_asof_no_future_leakage.sql
+│   │   │       ├── int_financial_asof/
+│   │   │       │   ├── int_financial_asof_publication_delay_leakage.sql
+│   │   │       │   └── int_financial_asof_rank_recency.sql
+│   │   │       ├── int_insolvency_label/
+│   │   │       │   ├── int_insolvency_label_false_negative.sql
+│   │   │       │   └── int_insolvency_label_false_positive.sql
+│   │   │       ├── int_logins_trailing/
+│   │   │       │   ├── int_logins_trailing_null_consistency.sql
+│   │   │       │   ├── int_logins_trailing_recency_boundary.sql
+│   │   │       │   └── int_logins_trailing_velocity_coherence.sql
+│   │   │       └── int_tickets_trailing_90d/
+│   │   │           └── int_tickets_trailing_90d_no_future_leakage.sql
+│   │   ├── .envrc
+│   │   ├── .envrc.example
+│   │   ├── .gitignore
+│   │   ├── dbt_project.yml
+│   │   ├── package-lock.yml
+│   │   ├── packages.yml
+│   │   └── README.md
 │   ├── ingestion/
 │   │   ├── __init__.py
 │   │   ├── extract.py
 │   │   └── restore.py
 │   └── __init__.py
+├── data/
+│   ├── .gitignore
+│   └── raw.dvc
 ├── database/
 │   ├── migrations/
 │   │   ├── versions/
@@ -85,8 +166,12 @@ insolvency_prediction_project/
 │   └── types.py
 ├── docs/
 │   ├── images/
-│   │   └── credit-default-database.pdf
+│   │   ├── credit-default-database.pdf
+│   │   ├── credit-default-DFM.pdf
+│   │   └── credit-default-star-schema.pdf
 │   └── schema/
+│       ├── credit-default-DFM.sql
+│       ├── credit-default-star-schema.sql
 │       └── database_structure.sql
 ├── pipeline/
 ├── schemas/
@@ -102,7 +187,8 @@ insolvency_prediction_project/
 │   ├── analytics/
 │   │   ├── ingestion/
 │   │   │   ├── __init__.py
-│   │   │   └── test_extract.py
+│   │   │   ├── test_extract.py
+│   │   │   └── test_restore.py
 │   │   └── __init__.py
 │   ├── database/
 │   │   ├── __init__.py
