@@ -16,7 +16,7 @@ CREATE TABLE "fct_company_credit_profile" (
   "unpaid_ratio_trailing_90d" decimal(5,4) NOT NULL,
   "total_outstanding_debt" decimal(15,2) NOT NULL,
   "days_since_last_login" integer,
-  "login_velocity" decimal(10,4),
+  "login_velocity" decimal(5,4),
   "billing_disputes_count" integer NOT NULL,
   "average_satisfaction_score" decimal(3,2),
   "is_insolvent" integer NOT NULL
@@ -45,6 +45,8 @@ CREATE TABLE "dim_date" (
   "day_name" varchar(10) NOT NULL,
   "is_weekend" boolean NOT NULL
 );
+
+CREATE UNIQUE INDEX ON "fct_company_credit_profile" ("company_id", "snapshot_date");
 
 CREATE INDEX ON "dim_companies" ("company_id");
 

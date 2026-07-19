@@ -1,0 +1,247 @@
+version: 2
+
+models:
+  - name: int_company_date_spine
+    description: "One row per (company_id, snapshot_date) for every month from foundation_date to today."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+            - snapshot_date
+    columns:
+      - name: company_id
+        description: "Business key of the company."
+        tests:
+          - not_null
+
+      - name: snapshot_date
+        description: "Point-in-time observation date (first of the month)."
+        tests:
+          - not_null
+
+  - name: int_billing_trailing_90d
+    description: "Intermediate model aggregating billing and payment metrics over a trailing 90-day window per company and snapshot date."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+            - snapshot_date
+    columns:
+      - name: company_id
+        tests:
+          - not_null
+
+      - name: snapshot_date
+        tests:
+          - not_null
+
+      - name: max_dpd_trailing_90d
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: avg_dpd_trailing_90d
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: unpaid_ratio_trailing_90d
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+
+      - name: total_outstanding_debt
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+  - name: int_companies_scd_resolved
+    description: "Intermediate model that resolves the historical state of each company at each point-in-time snapshot date using SCD Type 2 tracking columns."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+            - snapshot_date
+    columns:
+      - name: company_key
+        description: "Surrogate primary key representing the specific historical version of the company valid at the snapshot date."
+        tests:
+          - not_null
+
+      - name: company_id
+        description: "Natural business key of the corporate entity."
+        tests:
+          - not_null
+
+      - name: snapshot_date
+        description: "The point-in-time observation cutoff date."
+        tests:
+          - not_null
+
+      - name: vat_number
+        description: "11-digit corporate tax identifier."
+        tests:
+          - not_null
+
+      - name: legal_name
+        description: "Official registered name of the corporate entity."
+        tests:
+          - not_null
+
+      - name: legal_form
+        description: "Standardized legal structure abbreviation (e.g., SRL, SPA)."
+        data_tests:
+          - not_null
+
+      - name: foundation_date
+        description: "Historical date when the company was established."
+        tests:
+          - not_null
+
+      - name: is_active
+        description: "Flag indicating whether the entity was operational at the point of the snapshot date."
+        tests:
+          - not_null
+
+      - name: industry_sector
+        description: "Standardized economic activity sector."
+        tests:
+          - not_null
+
+      - name: company_age_days
+        description: "Calculated feature representing the age of the company in days at the snapshot date."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+  - name: int_contracts_asof
+    description: "Intermediate model aggregating active energy contract counts and specific commodity flags per company and snapshot date."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+            - snapshot_date
+    columns:
+      - name: company_id
+        description: "Natural business key of the corporate entity."
+        data_tests:
+          - not_null
+
+      - name: snapshot_date
+        description: "The point-in-time observation cutoff date."
+        data_tests:
+          - not_null
+
+      - name: active_contracts_count
+        description: "Total number of active energy contracts the company holds at the snapshot date."
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: has_active_electricity_contract
+        description: "Boolean flag indicating if the company has at least one active electricity contract at the snapshot date."
+        data_tests:
+          - not_null
+
+      - name: has_active_gas_contract
+        description: "Boolean flag indicating if the company has at least one active gas contract at the snapshot date."
+        data_tests:
+          - not_null
+
+  - name: int_insolvency_label
+    description: "Intermediate model that defines the target insolvency label for machine learning based on trailing 90-day payment history."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+            - snapshot_date
+    columns:
+      - name: company_id
+        description: "Natural business key of the corporate entity."
+        tests:
+          - not_null
+
+      - name: snapshot_date
+        description: "The point-in-time observation cutoff date."
+        tests:
+          - not_null
+
+      - name: max_dpd_trailing_90d
+        description: "Maximum days past due observed on invoices within the trailing 90 days."
+        tests:
+          - not_null
+
+      - name: is_insolvent
+        description: "Target label indicator: 1 if max_dpd_trailing_90d >= 90 days, else 0."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+
+  - name: int_user_logins_velocity
+    description: "Intermediate model calculating user login frequency, days since last login, and login velocity over a trailing 90-day window."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+            - snapshot_date
+    columns:
+      - name: company_id
+        description: "Natural business key of the corporate entity."
+        data_tests:
+          - not_null
+
+      - name: snapshot_date
+        description: "The point-in-time observation cutoff date."
+        data_tests:
+          - not_null
+
+      - name: days_since_last_login
+        description: "Days elapsed between the snapshot date and the most recent login timestamp. Nullable if no logins in 90 days."
+        data_tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0 or days_since_last_login is null"
+
+      - name: login_velocity
+        description: "Ratio of logins in trailing 30 days over the monthly average of the trailing 90 days. Nullable if no logins in 90 days."
+        data_tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0 or login_velocity is null"
+
+  - name: int_tickets_trailing_90d
+    description: "Intermediate model aggregating CRM ticket disputes and average satisfaction scores over a trailing 90-day window."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+            - snapshot_date
+    columns:
+      - name: company_id
+        description: "Natural business key of the corporate entity."
+        tests:
+          - not_null
+
+      - name: snapshot_date
+        description: "The point-in-time observation cutoff date."
+        tests:
+          - not_null
+
+      - name: billing_disputes_count
+        description: "Number of billing CRM tickets opened in the last 90 days. Defaults to 0."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: average_satisfaction_score
+        description: "Average customer satisfaction score for tickets resolved in the last 90 days. Nullable if no tickets were resolved."
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "is null or (average_satisfaction_score between 1.0 and 5.0)"
