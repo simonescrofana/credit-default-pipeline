@@ -168,7 +168,8 @@ insolvency_prediction_project/
 │   ├── images/
 │   │   ├── credit-default-database.pdf
 │   │   ├── credit-default-DFM.pdf
-│   │   └── credit-default-star-schema.pdf
+│   │   ├── credit-default-star-schema.pdf
+│   │   └── dag-dbt.jpg
 │   └── schema/
 │       ├── credit-default-DFM.sql
 │       ├── credit-default-star-schema.sql
