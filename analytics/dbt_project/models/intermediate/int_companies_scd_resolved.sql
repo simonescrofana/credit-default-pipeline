@@ -23,8 +23,7 @@ resolved as (
     from spine
     inner join companies
         on spine.company_id = companies.company_id
-        -- this means "all snapshots"
-        and spine.snapshot_date >= companies.dbt_valid_from
+        and spine.snapshot_date >= companies.foundation_date
         and (
             spine.snapshot_date < companies.dbt_valid_to
             or companies.dbt_valid_to is null

@@ -1,6 +1,7 @@
 services:
   postgres-db:
     image: postgres:17-alpine
+    shm_size: '2gb'
     container_name: credit_default_postgres
     restart: always
     env_file:

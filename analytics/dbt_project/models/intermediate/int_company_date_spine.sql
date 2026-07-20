@@ -1,3 +1,5 @@
+{{ config(materialized='table') }}
+
 with companies as (
     select distinct
         company_id,

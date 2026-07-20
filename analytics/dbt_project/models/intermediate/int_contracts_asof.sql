@@ -16,7 +16,7 @@ contracts_asof as (
     from spine
     inner join contracts
         on spine.company_id = contracts.company_id
-        and spine.snapshot_date >= contracts.dbt_valid_from
+        and spine.snapshot_date >= contracts.activation_date
         and (
             spine.snapshot_date < contracts.dbt_valid_to
             or contracts.dbt_valid_to is null

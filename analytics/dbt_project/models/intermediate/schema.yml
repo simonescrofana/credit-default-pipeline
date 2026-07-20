@@ -245,3 +245,26 @@ models:
         tests:
           - dbt_utils.expression_is_true:
               expression: "is null or (average_satisfaction_score between 1.0 and 5.0)"
+
+  - name: int_financial_asof
+    description: "Intermediate point-in-time financial statements model, ensuring no look-ahead bias by applying a 6-month publication delay."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+            - snapshot_date
+    columns:
+      - name: company_id
+        description: "Natural business key of the corporate entity."
+        data_tests:
+          - not_null
+
+      - name: snapshot_date
+        description: "The point-in-time ML cutoff date."
+        data_tests:
+          - not_null
+
+      - name: fiscal_year
+        description: "The fiscal year of the financial statement being observed."
+        data_tests:
+          - not_null

@@ -6,7 +6,7 @@ select
 from {{ ref('int_contracts_asof') }} c_asof
 left join {{ ref('stg_energy_contracts') }} stg
     on c_asof.company_id = stg.company_id
-    and c_asof.snapshot_date >= stg.dbt_valid_from
+    and c_asof.snapshot_date >= stg.activation_date
     and (c_asof.snapshot_date < stg.dbt_valid_to or stg.dbt_valid_to is null)
     and stg.contract_status = 'active'
 where c_asof.active_contracts_count > 0
