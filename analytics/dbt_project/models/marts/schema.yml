@@ -1,0 +1,174 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: "Calendar dimension, one row per day from min(foundation_date) to today."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - date_day
+    columns:
+      - name: date_day
+        description: "Calendar date, primary key."
+        tests:
+          - not_null
+          - unique
+
+      - name: month_number
+        description: "Month of year (1-12)."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+                expression: "between 1 and 12"
+
+      - name: quarter
+        description: "Calendar quarter (1-4)."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "between 1 and 4"
+
+      - name: day_of_week
+        description: "Day of week, Postgres convention (0=Sunday...6=Saturday)."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "between 0 and 6"
+
+      - name: day_name
+        description: "Day of week, from Monday to Sunday"
+        tests:
+          - not_null
+
+      - name: is_weekend
+        description: "True for Saturday/Sunday."
+        tests:
+          - not_null
+
+  - name: dim_companies
+    description: "SCD2 company dimension: one row per historical company version, not per snapshot_date."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+            - dbt_valid_from
+    columns:
+      - name: company_key
+        description: "Surrogate PK, hash of (company_id, dbt_valid_from)."
+        tests:
+          - not_null
+          - unique
+
+      - name: company_id
+        description: "Business key. Repeats across a company's historical versions."
+        tests:
+          - not_null
+
+      - name: vat_number
+        description: "11-digit Italian VAT number."
+        tests:
+          - not_null
+
+      - name: legal_form
+        description: "Legal entity type (e.g. S.r.l., S.p.A.)."
+        tests:
+          - not_null
+
+      - name: industry_sector
+        description: "Industry sector as of this version's validity window."
+        tests:
+          - not_null
+
+      - name: dbt_valid_from
+        description: "Start of this version's validity window."
+        tests:
+          - not_null
+
+  - name: fct_company_credit_profile
+    description: "ML training/inference grain: one row per (company_id, snapshot_date), assembled from all intermediate as-of models."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_id
+            - snapshot_date
+    columns:
+      - name: company_profile_key
+        description: "Surrogate PK, hash of (company_id, snapshot_date)."
+        tests:
+          - not_null
+          - unique
+
+      - name: company_id
+        description: "Business key. FK to dim_companies at the business-key level."
+        tests:
+          - not_null
+
+      - name: company_key
+        description: "FK to dim_companies, resolved to the version valid as of snapshot_date."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_companies')
+              field: company_key
+
+      - name: snapshot_date
+        description: "Point-in-time ML cutoff date. FK to dim_date."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_day
+
+      - name: company_age_days
+        description: "Days between foundation_date and snapshot_date."
+        tests:
+          - not_null
+
+      - name: is_insolvent
+        description: "Target variable. 1 if max_dpd_trailing_90d >= 90, else 0."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+
+      - name: active_contracts_count
+        description: "Count of active energy contracts as of snapshot_date."
+        tests:
+          - not_null
+
+      - name: has_active_electricity_contract
+        description: "True if at least one active electricity contract exists as of snapshot_date."
+        tests:
+          - not_null
+
+      - name: has_active_gas_contract
+        description: "True if at least one active gas contract exists as of snapshot_date."
+        tests:
+          - not_null
+
+      - name: max_dpd_trailing_90d
+        description: "Max days-past-due on invoices due in the trailing 90 days."
+        tests:
+          - not_null
+
+      - name: avg_dpd_trailing_90d
+        description: "Average days-past-due on invoices due in the trailing 90 days."
+        tests:
+          - not_null
+
+      - name: unpaid_ratio_trailing_90d
+        description: "Share of unpaid/overdue invoices in the trailing 90 days."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "between 0 and 1"
+
+      - name: total_outstanding_debt
+        description: "Sum of unpaid/overdue invoice amounts as of snapshot_date."
+        tests:
+          - not_null
+
+      - name: billing_disputes_count
+        description: "Count of billing-category support tickets opened in the trailing 90 days."
+        tests:
+          - not_null

@@ -1,4 +1,5 @@
 [core]
-    remote = dvc_drive
-['remote "dvc_drive"']
-    url = gdrive://1nY2z3vvx29aFIVSs8gFoQibUVtXbb2tm
+    remote = origin
+['remote "origin"']
+    url = https://dagshub.com/simonescrofana/DVC-credit-default-pipeline.dvc
+    auth = basic

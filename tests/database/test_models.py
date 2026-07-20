@@ -285,7 +285,7 @@ def test_range_constraint(db_session: Session) -> None:
     )
     db_session.add(ticket)
 
-    with pytest.raises(IntegrityError, match=".*satisfaction_score_range_constraint.*"):
+    with pytest.raises(IntegrityError):
         db_session.flush()
 
 
@@ -337,7 +337,7 @@ def test_composite_foreign_key_constraint(db_session: Session) -> None:
     )
     db_session.add(invoice)
 
-    with pytest.raises(IntegrityError, match=".*FOREIGN KEY constraint failed.*"):
+    with pytest.raises(IntegrityError):
         db_session.flush()
 
 
@@ -445,7 +445,7 @@ def test_single_column_unique_constraint(db_session: Session) -> None:
     )
     db_session.add(company_2)
 
-    with pytest.raises(IntegrityError, match=".*UNIQUE constraint failed.*"):
+    with pytest.raises(IntegrityError):
         db_session.flush()
     db_session.rollback()
 
@@ -485,7 +485,7 @@ def test_single_column_unique_constraint(db_session: Session) -> None:
     )
     db_session.add(contract_2)
 
-    with pytest.raises(IntegrityError, match=".*UNIQUE constraint failed.*"):
+    with pytest.raises(IntegrityError):
         db_session.flush()
 
 
@@ -511,7 +511,7 @@ def test_nullable_false_constraint(db_session: Session) -> None:
     )
     db_session.add(invalid_company)
 
-    with pytest.raises(IntegrityError, match=".*NOT NULL constraint failed.*"):
+    with pytest.raises(IntegrityError):
         db_session.flush()
 
 
@@ -567,5 +567,5 @@ def test_on_delete_restriction_behavior(db_session: Session) -> None:
 
     # We should have a not null constraint failed for the invoice contract_id becoming
     # null with the contract deletion
-    with pytest.raises(IntegrityError, match=".*NOT NULL constraint failed.*"):
+    with pytest.raises(IntegrityError):
         db_session.flush()

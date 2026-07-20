@@ -6,11 +6,15 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.18.5",
-    "dvc[gdrive]>=3.67.1",
+    "dbt-core>=1.11.12",
+    "dbt-postgres>=1.10.2",
+    "dvc>=3.67.1",
     "faker>=40.28.1",
     "logfire[sqlalchemy]>=4.37.0",
     "numpy>=2.5.1",
+    "pandas>=3.0.3",
     "psycopg2-binary>=2.9.12",
+    "pyarrow>=25.0.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
     "pytest>=9.1.1",
@@ -30,12 +34,18 @@ ignore = [
     "D213"  # Disable summary on the second line (choosing D212)
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D100", "D103", "D417"]
+
 [tool.ruff.format]
 docstring-code-format = true
 docstring-code-line-length = 72
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+filterwarnings = [
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.coverage.run]
 omit = [
@@ -49,5 +59,13 @@ exclude_also = [
     "return dialect.type_descriptor\\(self.impl\\)",
     "return element._pg_expr",
     "if __name__ == .__main__.:",
-    "if k.contract_status == \"terminated\"" # dead code at the moment
+    "if k.contract_status == \"terminated\"", # dead code at the moment
+    ".*if not is_sqlite",
+    "if is_ci_environment:",
+    "elif not is_ci_environment:",
+    "global_engine = create_engine\\(\"sqlite:///:memory:\"\\)",
+    "def set_sqlite_pragma\\(dbapi_connection, connection_record\\):",
+    "engine = create_engine\\(DATABASE_URL, pool_pre_ping=True\\)",
+    "if dialect.name == \"sqlite\":",
+    "return element._sqlite_expr",
 ]

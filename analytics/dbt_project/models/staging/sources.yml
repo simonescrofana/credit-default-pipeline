@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: db_source
+    database: "{{ env_var('POSTGRES_DB') }}"
+    schema: public
+    tables:
+      - name: companies
+        description: "Core administrative and B2B corporate registry mapping customer demographics."
+      - name: energy_contracts
+        description: "B2B power and gas supply contracts tracking capacity parameters and commodity profiles."
+      - name: financial_statements
+        description: "Historical annual corporate balance sheets tracking revenue, leverage, and liquidity metrics."
+      - name: invoices
+        description: "Transactional accounting records detailing consumption splits and billing balances."
+      - name: payments
+        description: "High-granularity transactional tracking mapping settlement execution and billing anomalies."
+      - name: crm_support_tickets
+        description: "Customer service operations telemetry capturing friction indicators and resolution metrics."
+      - name: user_web_logins
+        description: "Digital engagement audit trails tracking real-time user authentication and platform liveness."

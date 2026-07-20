@@ -10,12 +10,14 @@ Supported tools and integrations:
 """
 
 import logging
+import os
 from collections.abc import Iterator
 
 import logfire
 import pytest
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from config import settings
 from database.base import Base
@@ -35,35 +37,119 @@ logging.basicConfig(
 logfire.instrument_sqlalchemy(engine=engine)
 
 
-@pytest.fixture(scope="function")
-def db_session() -> Iterator[Session]:
-    """Provide an isolated, in-memory SQLite session with enforced foreign keys.
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database() -> Iterator[None]:
+    """Set up and tears down the database environment for the test session.
 
-    Creates a transient, serverless SQLite database initialized with the full
-    declarative schema metadata. This setup ensures high-speed execution and
-    zero-dependency environments for database testing compared to PostgreSQL.
+    Configures a PostgreSQL connection with NullPool if running in a GitHub
+    Actions CI environment to prevent pandas from freezing active connections.
+    Otherwise, initializes an in-memory SQLite database and explicitly enables
+    foreign key support.
 
     Yields:
-        Session: Active SQLAlchemy session bound to the clean memory engine.
+        None: Control is yielded back to the test suite for the session duration.
 
     """
-    engine = create_engine("sqlite:///:memory:")
+    is_ci_environment = os.getenv("GITHUB_ACTIONS") == "true"
 
-    # This function bypasses a SQLite limit and allows fk constraints.
-    @event.listens_for(engine, "connect")
-    def set_sqlite_pragma(dbapi_connection, connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+    if is_ci_environment:
+        db_url = settings.database_url
 
-    Base.metadata.create_all(engine)
+        # pandas may keep active connections freezing Postgres during tests
+        # NullPool forces connection closure
+        global_engine = create_engine(db_url, poolclass=NullPool)
 
-    TestingSessionLocal = sessionmaker(bind=engine)
+    else:
+        global_engine = create_engine("sqlite:///:memory:")
+
+        # This function bypasses a SQLite limit and allows fk constraints.
+        @event.listens_for(global_engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+    Base.metadata.create_all(global_engine)
+
+    yield
+
+    Base.metadata.drop_all(global_engine)
+    global_engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def db_session() -> Iterator[Session]:
+    """Provide a transactional database session for a single test function.
+
+    Create a clean database environment for each test. For CI environments, it
+    initializes a PostgreSQL engine and truncates all tables after execution to
+    ensure isolation. For local environments, it uses an in-memory SQLite
+    database with foreign key support enabled and drops the schema afterward.
+
+    Yields:
+        Session: A SQLAlchemy database session object.
+
+    """
+    is_ci_environment = os.getenv("GITHUB_ACTIONS") == "true"
+
+    if is_ci_environment:
+        db_url = settings.database_url
+        test_engine = create_engine(db_url, poolclass=NullPool)
+
+    else:  # pragma: no cover
+        test_engine = create_engine("sqlite:///:memory:")
+
+        @event.listens_for(test_engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+        Base.metadata.create_all(test_engine)
+
+    TestingSessionLocal = sessionmaker(bind=test_engine)
     session = TestingSessionLocal()
 
     try:
         yield session
+
     finally:
         session.close()
-        Base.metadata.drop_all(engine)
-        engine.dispose()
+
+        if is_ci_environment:
+            with test_engine.begin() as conn:
+                for table in reversed(Base.metadata.sorted_tables):
+                    conn.execute(
+                        text(f"TRUNCATE TABLE {table.name} RESTART IDENTITY CASCADE;")
+                    )
+        elif not is_ci_environment:
+            Base.metadata.drop_all(test_engine)
+
+        test_engine.dispose()
+
+
+@pytest.fixture(scope="function", autouse=True)
+def override_get_db(db_session: Session) -> Iterator[None]:
+    """Override the application's database dependency with a test session.
+
+    Dynamically patch the `get_db` generator function inside the database
+    connection module to yield the provided test session, ensuring all
+    application routes use the same isolated database context during a test.
+    Restore the original function after the test completes.
+
+    Yields:
+        None: Control is yielded back to the execution of the test function.
+
+    """
+
+    def _get_db_override() -> Iterator[Session]:
+        yield db_session
+
+    import database.connection as connection_module
+
+    original = connection_module.get_db
+    connection_module.get_db = _get_db_override
+
+    yield
+
+    connection_module.get_db = original
