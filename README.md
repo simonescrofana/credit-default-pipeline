@@ -174,7 +174,12 @@ insolvency_prediction_project/
 │       ├── credit-default-DFM.sql
 │       ├── credit-default-star-schema.sql
 │       └── database_structure.sql
-├── pipeline/
+├── ml/
+│   ├── dataset/
+│   │   ├── __init__.py
+│   │   ├── loader.py
+│   │   └── split.py
+│   └── __init__.py
 ├── schemas/
 │   ├── __init__.py
 │   ├── base.py
@@ -195,6 +200,12 @@ insolvency_prediction_project/
 │   │   ├── __init__.py
 │   │   ├── test_connection.py
 │   │   └── test_models.py
+│   ├── ml/
+│   │   ├── dataset/
+│   │   │   ├── __init.py__
+│   │   │   ├── test_loader.py
+│   │   │   └── test_split.py
+│   │   └── __init__.py
 │   ├── schemas/
 │   │   ├── __init__.py
 │   │   └── test_models_validation.py
