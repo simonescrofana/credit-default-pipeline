@@ -76,6 +76,7 @@ def load_data(session: Session) -> pd.DataFrame:
         logger.exception("Error while reading SQL query with pandas!")
         raise
 
+    df = df.sort_values("snapshot_date")
     df = df.set_index(["company_id", "snapshot_date"])
     logger.info("DataFrame successfully created: %d rows loaded.", len(df))
     return df
