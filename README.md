@@ -199,6 +199,7 @@ insolvency_prediction_project/
 │   ├── dataset/
 │   │   ├── __init__.py
 │   │   ├── loader.py
+│   │   ├── preprocessing.py
 │   │   └── split.py
 │   └── __init__.py
 ├── schemas/
@@ -225,6 +226,7 @@ insolvency_prediction_project/
 │   │   ├── dataset/
 │   │   │   ├── __init__.py
 │   │   │   ├── test_loader.py
+│   │   │   ├── test_preprocessing.py
 │   │   │   └── test_split.py
 │   │   └── __init__.py
 │   ├── schemas/
