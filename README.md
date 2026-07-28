@@ -23,7 +23,7 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 
 1. **Transactional Layer (OLTP):** Containerized PostgreSQL instance simulating a production core-banking system managed via SQLAlchemy ORM and tracked through Alembic migrations.
 2. **Analytical Layer (OLAP):** Dimensional Data Warehouse modeled into a Star Schema driven by dbt Core over historical immutable ledgers.
-3. **MLOps & Lifecyle Layer:** Data version control implemented with DVC. Dual-engine training pipeline (Gradient Boosted Trees & PyTorch Neural Architectures) integrated with MLflow for artifact logging, hyperparameter tracking, and model registry.
+3. **MLOps & Lifecyle Layer:** Data version control implemented with DVC. Multi-model training pipeline (a cost-sensitive baseline, Gradient Boosted Trees, and a PyTorch Neural Network) integrated with MLflow for artifact logging, hyperparameter tracking, and model registry.
 4. **Explainable AI (xAI) Module:** Interpretability extraction utilizing SHAP to ensure credit scoring compliance and transparency.
 5. **Generative AI Layer:** An agent system built via LangGraph acting as an autonomous financial analyst, querying a ChromaDB vector store, running local inference, and validated by an LLM-as-a-Judge node.
 6. **Application & Serving Layer:** A FastAPI backend exposing validated REST endpoints for predictions and chat interactions, paired with a Streamlit interface acting as a live, interactive demo of the full pipeline.
@@ -43,6 +43,18 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 #### Temporal Integrity as a First-Class Constraint
 * **Choice:** Treating the feature mart as panel data (one row per company per snapshot date) and designing every split, validation, and dimension-resolution strategy around a point-in-time cutoff instead of random shuffling.
 * **Justification:** Credit risk data is inherently sequential. A random split would leak future information into training and produce metrics that look strong but collapse in production; SCD Type 2 dimensions and as-of joins ensure that every feature reflects only information that was actually available at the snapshot date.
+
+#### Trailing DPD Window Fix (Data Quality)
+* **Choice:** Widened the 90-day trailing window used by `int_billing_trailing_90d` to select candidate invoices to 120 days, without changing the underlying days-past-due calculation.
+* **Justification:** While validating the ML feature set end-to-end, the original 90-day window was found to systematically exclude unpaid invoices right before their days-past-due value could reach the 90-day insolvency threshold, silently producing zero labeled insolvencies across the entire mart. 120 days is the minimum window that reliably captures the threshold under monthly snapshots.
+
+#### Informative Missing Values over Blind Imputation or Row Dropping
+* **Choice:** Nullable feature groups (financial statement ratios, login activity, support ticket satisfaction) are handled with a per-group binary flag marking whether the value was observed, followed by a group-specific fallback constant, rather than dropping incomplete rows or imputing with a statistical average.
+* **Justification:** A diagnostic query showed that a naive `dropna` would have discarded roughly 77% of the dataset, disproportionately removing companies with no recent support tickets — a systematic selection bias, not a random one. The missingness itself is informative (e.g. no resolved tickets recently, no published financial statement yet), so it is preserved as a signal instead of being discarded or disguised as an invented average.
+
+#### Size-Weighted Cross-Validation Metric Aggregation
+* **Choice:** Aggregating per-fold validation metrics with a mean weighted by each fold's validation set size, while confusion matrix counts (true/false positives/negatives) are summed rather than averaged.
+* **Justification:** `TimeSeriesSplit`'s expanding window produces folds of unequal size, so an unweighted mean would give a small, less reliable early fold the same influence as a large, more reliable later one. Confusion matrix counts are absolute quantities tied to fold size; averaging them (weighted or not) yields a number with no clear interpretation, while summing preserves their meaning as a total across the full cross-validation run, since each row is scored exactly once.
 
 #### Modern Python Tooling (`uv` + Ruff)
 * **Choice:** Moving away from standard `pip`/`venv` and selecting `uv` as the exclusive dependency manager alongside Ruff for quality gating.
@@ -201,7 +213,18 @@ insolvency_prediction_project/
 │   │   ├── loader.py
 │   │   ├── preprocessing.py
 │   │   └── split.py
-│   └── __init__.py
+│   ├── evaluation/
+│   │   ├── __init__.py
+│   │   └── metrics.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── baseline.py
+│   ├── training/
+│   │   ├── __init__.py
+│   │   ├── mlflow_utils.py
+│   │   └── trainer.py
+│   ├── __init__.py
+│   └── run_training.py
 ├── schemas/
 │   ├── __init__.py
 │   ├── base.py
@@ -228,7 +251,17 @@ insolvency_prediction_project/
 │   │   │   ├── test_loader.py
 │   │   │   ├── test_preprocessing.py
 │   │   │   └── test_split.py
-│   │   └── __init__.py
+│   │   ├── evaluation/
+│   │   │   ├── __init__.py
+│   │   │   └── test_metrics.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   └── test_baseline.py
+│   │   ├── training/
+│   │   │   ├── __init__.py
+│   │   │   └── test_trainer.py
+│   │   ├── __init__.py
+│   │   └── test_run_training.py
 │   ├── schemas/
 │   │   ├── __init__.py
 │   │   └── test_models_validation.py
