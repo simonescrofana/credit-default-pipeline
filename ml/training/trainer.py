@@ -27,6 +27,7 @@ def run_cross_validation(
     model_builder: Callable[..., BaseEstimator],
     model_params: dict,
     experiment_name: str,
+    threshold: float = 0.5,
 ) -> list[dict[str, float]]:
     """Train and evaluate a model across all cross-validation folds.
 
@@ -47,6 +48,9 @@ def run_cross_validation(
             every call.
         experiment_name (str): The MLflow experiment to log runs under (one
             experiment per model family, e.g. `"baseline"`).
+        threshold (float): The value of the classification threshold. In
+            `evaluation/plots.ipynb` the optimal value is computed maximizing
+            `F2-score` on aggregated CV folds. Defaults to 0.5.
 
     Returns:
         list[dict[str, float]]: The computed metrics for each fold, in fold order.
@@ -66,10 +70,15 @@ def run_cross_validation(
                     model.fit(fold.X_train, fold.y_train)
 
                     y_pred_proba = model.predict_proba(fold.X_val)[:, 1]
-                    metrics = compute_metrics(fold.y_val, y_pred_proba)
+                    metrics = compute_metrics(fold.y_val, y_pred_proba, threshold)
 
                     log_fold_run(
-                        model=model, params=model_params, metrics=metrics, fold_index=i
+                        model=model,
+                        params=model_params,
+                        metrics=metrics,
+                        fold_index=i,
+                        y_val=fold.y_val,
+                        y_pred_proba=y_pred_proba,
                     )
 
                 fold_metrics.append(metrics)
@@ -92,6 +101,7 @@ def train_final_model(
     model_builder: Callable[..., BaseEstimator],
     model_params: dict,
     experiment_name: str,
+    threshold: float = 0.5,
 ) -> tuple[BaseEstimator, dict[str, float]]:
     """Fit and evaluate the final model on the full training/CV and test data.
 
@@ -110,6 +120,9 @@ def train_final_model(
         model_params (dict): Keyword arguments passed to `model_builder`.
         experiment_name (str): The MLflow experiment to log this run under
             (the same experiment used for the model's cross-validation runs).
+        threshold (float, optional): The value of the classification threshold. In
+            `evaluation/plots.ipynb` the optimal value is computed maximizing
+            `F2-score` on aggregated CV folds. Defaults to 0.5.
 
     Returns:
         tuple[BaseEstimator, dict[str, float]]: The fitted model and its
@@ -126,9 +139,15 @@ def train_final_model(
 
     with logfire.span("final_model_evaluation"):
         y_pred_proba = model.predict_proba(X_test)[:, 1]
-        metrics = compute_metrics(y_test, y_pred_proba)
+        metrics = compute_metrics(y_test, y_pred_proba, threshold)
 
-    log_final_run(model=model, params=model_params, metrics=metrics)
+    log_final_run(
+        model=model,
+        params=model_params,
+        metrics=metrics,
+        y_test=y_test,
+        y_pred_proba=y_pred_proba,
+    )
 
     logger.info("Final model evaluated on the holdout test set. Metrics: %s", metrics)
     return model, metrics

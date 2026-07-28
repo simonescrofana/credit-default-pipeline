@@ -55,6 +55,9 @@ class ModelConfig(NamedTuple):
         scale (bool): Whether this model family requires scaled features
             (True for linear models and the MLP, False for tree-based models
             like XGBoost, which are scale-invariant).
+        threshold (float, optional): The value of the classification threshold. In
+            `evaluation/plots.ipynb` the optimal value is computed maximizing
+            `F2-score` on aggregated CV folds. Defaults to 0.5.
 
     """
 
@@ -62,14 +65,21 @@ class ModelConfig(NamedTuple):
     model_builder: Callable[..., BaseEstimator]
     model_params: dict
     scale: bool
+    threshold: float = 0.5
 
 
 MODEL_CONFIGS = [
     ModelConfig(
         experiment_name="baseline",
         model_builder=build_baseline_model,
-        model_params={"l1_ratio": 0.0, "C": 1.0, "class_weight": "balanced"},
+        model_params={
+            "C": 1.0,
+            "class_weight": "balanced",
+            "max_iter": 1000,
+        },
         scale=True,
+        # optimal threshold, see plots.ipynb (F2-optimal on aggregated CV folds)
+        threshold=0.5047,
     ),
     # future entries: xgboost (scale=False), mlp (scale=True)
 ]
@@ -138,6 +148,7 @@ def main(models_to_train: list[str] | None = None) -> None:
             model_builder=config.model_builder,
             model_params=config.model_params,
             experiment_name=config.experiment_name,
+            threshold=config.threshold,
         )
 
         train_final_model(
@@ -148,6 +159,7 @@ def main(models_to_train: list[str] | None = None) -> None:
             model_builder=config.model_builder,
             model_params=config.model_params,
             experiment_name=config.experiment_name,
+            threshold=config.threshold,
         )
 
 

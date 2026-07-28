@@ -12,9 +12,9 @@ RANDOM_STATE = 202607
 
 
 def build_baseline_model(
-    l1_ratio: float = 0.0,
     C: float = 1.0,
     class_weight: str | dict = "balanced",
+    max_iter: int = 1000,
 ) -> LogisticRegression:
     """Build a baseline Logistic Regression model using the SAGA solver.
 
@@ -32,6 +32,8 @@ def build_baseline_model(
             If `"balanced"`, uses class frequencies to automatically adjust
             weights inversely proportional to class frequencies. Defaults to
             `"balanced"`.
+        max_iter (int, optional): Maximum number of iterations taken for the
+            solvers to converge. Defaults to `1000`.
 
     Returns:
         LogisticRegression: An un-fitted scikit-learn `LogisticRegression`
@@ -40,10 +42,9 @@ def build_baseline_model(
 
     """
     return LogisticRegression(
-        l1_ratio=l1_ratio,
         C=C,
-        solver="saga",
+        solver="lbfgs",
         class_weight=class_weight,
-        max_iter=1000,
+        max_iter=max_iter,
         random_state=RANDOM_STATE,
     )

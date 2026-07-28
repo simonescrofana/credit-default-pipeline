@@ -10,5 +10,5 @@ inner join {{ ref('stg_energy_contracts') }} as c
 inner join {{ ref('stg_invoices') }} as i
     on i.contract_id = c.contract_id
 where i.issue_date > f.snapshot_date
-    and i.due_date > f.snapshot_date - interval '90 days'
+    and i.due_date > f.snapshot_date - interval '120 days'
     and i.due_date <= f.snapshot_date

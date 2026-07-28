@@ -11,6 +11,7 @@ dependencies = [
     "dvc>=3.67.1",
     "faker>=40.28.1",
     "logfire[sqlalchemy]>=4.37.0",
+    "matplotlib>=3.11.1",
     "mlflow-skinny>=3.14.0",
     "numpy>=2.5.1",
     "pandas>=3.0.3",
@@ -34,7 +35,8 @@ extend-exclude = ["database/migrations/versions/*"]
 select = ["E", "F", "W", "I", "D"]
 ignore = [
     "D203", # Disable the empty line before class (choosing D211)
-    "D213"  # Disable summary on the second line (choosing D212)
+    "D213", # Disable summary on the second line (choosing D212)
+    "E402"  # Allow imports not to be at the top of the files
 ]
 
 [tool.ruff.lint.per-file-ignores]
