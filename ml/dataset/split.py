@@ -138,10 +138,10 @@ def train_val_test_split(
 
     Returns:
         tuple[list[Fold], pd.DataFrame]: A tuple containing a list of `Fold`
-        instances for cross-validation and the holdout test DataFrame (`df_test`).
+            instances for cross-validation and the holdout test DataFrame (`df_test`).
 
     """
     df_remaining, df_test = isolate_test_set(df=df, n_test_months=n_test_months)
     train_val_folds = generate_cv_folds(df=df_remaining, n_splits=n_splits)
 
-    return train_val_folds, df_test
+    return train_val_folds, df_remaining, df_test

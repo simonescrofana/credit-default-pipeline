@@ -72,7 +72,7 @@ def test_load_data_happy_path(
     result = load_data(db_session)
 
     assert isinstance(result.index, pd.MultiIndex)
-    assert list(result.index.names) == ["company_id", "snapshot_date"]
+    assert list(result.index.names) == ["company_id", "snapshot_date", "legal_name"]
     assert len(result) == 3
     assert "is_insolvent" in result.columns
     mock_read_sql.assert_called_once()

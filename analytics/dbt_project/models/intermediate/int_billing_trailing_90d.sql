@@ -51,7 +51,7 @@ invoices_asof as (
     from spine
     inner join invoices_with_company
         on spine.company_id = invoices_with_company.company_id
-        and invoices_with_company.due_date > spine.snapshot_date - interval '90 days'
+        and invoices_with_company.due_date > spine.snapshot_date - interval '120 days'
         and invoices_with_company.due_date <= spine.snapshot_date
 ),
 

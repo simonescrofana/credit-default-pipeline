@@ -26,7 +26,6 @@ QUERY = """
         f.cash_to_debt_ratio,
         f.net_profit_margin,
         f.ebitda,
-        f.max_dpd_trailing_90d,
         f.avg_dpd_trailing_90d,
         f.unpaid_ratio_trailing_90d,
         f.total_outstanding_debt,
@@ -41,9 +40,9 @@ QUERY = """
         dt.year,
         dt.quarter,
         dt.month_number AS month
-    FROM fct_company_credit_profile f
-    JOIN dim_companies d ON f.company_key = d.company_key
-    JOIN dim_date dt ON f.snapshot_date = dt.date_day
+    FROM public_marts.fct_company_credit_profile f
+    JOIN public_marts.dim_companies d ON f.company_key = d.company_key
+    JOIN public_marts.dim_date dt ON f.snapshot_date = dt.date_day
 """
 
 
@@ -60,7 +59,7 @@ def load_data(session: Session) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: A pandas DataFrame containing the joined credit profile
-        data, indexed by `company_id` and `snapshot_date`.
+            data, indexed by `company_id` and `snapshot_date`.
 
     Raises:
         SQLAlchemyError: If an error occurs during database query execution.
@@ -77,6 +76,6 @@ def load_data(session: Session) -> pd.DataFrame:
         raise
 
     df = df.sort_values("snapshot_date")
-    df = df.set_index(["company_id", "snapshot_date"])
+    df = df.set_index(["company_id", "snapshot_date", "legal_name"])
     logger.info("DataFrame successfully created: %d rows loaded.", len(df))
     return df

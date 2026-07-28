@@ -170,13 +170,24 @@ def test_train_val_test_split_orchestrates_full_pipeline(
     n_test_months = 4
     n_splits = 3
 
-    train_val_folds, df_test = train_val_test_split(
+    train_val_folds, df_train_full, df_test = train_val_test_split(
         synthetic_star_schema_df, n_test_months=n_test_months, n_splits=n_splits
     )
 
     assert len(train_val_folds) == n_splits
     assert [isinstance(fold, Fold) for fold in train_val_folds]
+    assert isinstance(df_train_full, pd.DataFrame)
     assert isinstance(df_test, pd.DataFrame)
 
+    full_train_dates = df_train_full.index.get_level_values("snapshot_date").unique()
     test_dates = df_test.index.get_level_values("snapshot_date").unique()
+
     assert len(test_dates) == n_test_months
+    assert (
+        len(full_train_dates)
+        == len(
+            synthetic_star_schema_df.index.get_level_values("snapshot_date").unique()
+        )
+        - n_test_months
+    )
+    assert len(df_train_full) + len(df_test) == len(synthetic_star_schema_df)

@@ -221,3 +221,8 @@ __marimo__/
 
 # Secret files and tokens/passwords
 .secrets
+
+# MLflow
+mlflow.db
+mlruns/
+mlartifacts/

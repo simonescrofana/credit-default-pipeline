@@ -11,6 +11,7 @@ dependencies = [
     "dvc>=3.67.1",
     "faker>=40.28.1",
     "logfire[sqlalchemy]>=4.37.0",
+    "mlflow-skinny>=3.14.0",
     "numpy>=2.5.1",
     "pandas>=3.0.3",
     "psycopg2-binary>=2.9.12",
@@ -20,6 +21,7 @@ dependencies = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "scikit-learn>=1.9.0",
+    "skops>=0.14.0",
     "sqlalchemy>=2.0.51",
 ]
 
@@ -52,7 +54,8 @@ filterwarnings = [
 omit = [
     "**/__init__.py",
     "config.py",
-    "utils/logging_utils.py"
+    "utils/logging_utils.py",
+    "ml/training/mlflow_utils.py",
 ]
 
 [tool.coverage.report]

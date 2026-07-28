@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     # LOGFIRE
     LOGFIRE_TOKEN: SecretPassword
 
+    # MLFLOW
+    MLFLOW_TRACKING_URI: Annotated[
+        str,
+        Field(
+            description="MLflow tracking backend URI (SQLite for local development)."
+        ),
+    ] = "sqlite:///mlflow.db"
+
     @computed_field
     @property
     def database_url(self) -> str:

@@ -35,8 +35,8 @@ def build_baseline_model(
 
     Returns:
         LogisticRegression: An un-fitted scikit-learn `LogisticRegression`
-        estimator configured with the specified parameters and a fixed random
-        seed.
+            estimator configured with the specified parameters and a fixed random
+            seed.
 
     """
     return LogisticRegression(

@@ -32,7 +32,6 @@ NUMERIC_COLS_TO_SCALE = [
     "cash_to_debt_ratio",
     "net_profit_margin",
     "ebitda",
-    "max_dpd_trailing_90d",
     "avg_dpd_trailing_90d",
     "unpaid_ratio_trailing_90d",
     "total_outstanding_debt",
@@ -179,17 +178,17 @@ def preprocess_test_set(
 
     Args:
         df_train_full (pd.DataFrame): The full training/CV DataFrame (the
-            ``df_remaining`` output of ``isolate_test_set``), features and
+            `df_remaining` output of `isolate_test_set`), features and
             target still combined.
         df_test (pd.DataFrame): The held-out test DataFrame, features and
             target still combined.
         scale (bool, optional): Whether to apply feature scaling. Defaults to
-            ``True``.
+            `True`.
 
     Returns:
         tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
-        ``(X_train_full, y_train_full, X_test, y_test)``, ready for a final
-        model fit and evaluation.
+            `(X_train_full, y_train_full, X_test, y_test)`, ready for a final
+            model fit and evaluation.
 
     """
     y_train_full = df_train_full[TARGET_COLUMN]
