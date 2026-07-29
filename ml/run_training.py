@@ -12,6 +12,7 @@ from typing import NamedTuple
 import mlflow
 import pandas as pd
 from sklearn.base import BaseEstimator
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from config import settings
 from database.connection import get_db
@@ -33,6 +34,10 @@ class FinalSplit(NamedTuple):
         y_train (pd.Series): Full training/CV target labels.
         X_test (pd.DataFrame): Held-out test feature matrix.
         y_test (pd.Series): Held-out test target labels.
+        encoder (OneHotEncoder): The OneHotEncoder fitted on the full
+            training/CV data.
+        scaler (StandardScaler | None): The StandardScaler fitted on the
+            full training/CV data, or None if scaling was not applied.
 
     """
 
@@ -40,6 +45,8 @@ class FinalSplit(NamedTuple):
     y_train: pd.Series
     X_test: pd.DataFrame
     y_test: pd.Series
+    encoder: OneHotEncoder
+    scaler: StandardScaler | None
 
 
 class ModelConfig(NamedTuple):
@@ -109,11 +116,11 @@ def prepare_training_data(scale: bool) -> tuple[list[Fold], FinalSplit]:
     train_folds, df_remaining, df_test = train_val_test_split(df=dataset)
 
     train_folds = preprocess_train_folds(folds=train_folds, scale=scale)
-    X_train, y_train, X_test, y_test = preprocess_test_set(
+    X_train, y_train, X_test, y_test, encoder, scaler = preprocess_test_set(
         df_train_full=df_remaining, df_test=df_test, scale=scale
     )
 
-    return train_folds, FinalSplit(X_train, y_train, X_test, y_test)
+    return train_folds, FinalSplit(X_train, y_train, X_test, y_test, encoder, scaler)
 
 
 def main(models_to_train: list[str] | None = None) -> None:
@@ -156,6 +163,8 @@ def main(models_to_train: list[str] | None = None) -> None:
             y_train_full=final_split.y_train,
             X_test=final_split.X_test,
             y_test=final_split.y_test,
+            encoder=final_split.encoder,
+            scaler=final_split.scaler,
             model_builder=config.model_builder,
             model_params=config.model_params,
             experiment_name=config.experiment_name,

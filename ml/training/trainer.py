@@ -14,6 +14,7 @@ import logfire
 import mlflow
 import pandas as pd
 from sklearn.base import BaseEstimator
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from ml.dataset.split import Fold
 from ml.evaluation.metrics import aggregate_fold_metrics, compute_metrics
@@ -98,6 +99,8 @@ def train_final_model(
     y_train_full: pd.Series,
     X_test: pd.DataFrame,
     y_test: pd.Series,
+    encoder: OneHotEncoder,
+    scaler: StandardScaler | None,
     model_builder: Callable[..., BaseEstimator],
     model_params: dict,
     experiment_name: str,
@@ -108,13 +111,19 @@ def train_final_model(
     This must be called only after model selection and hyperparameter tuning
     are complete, using the full pre-test data rather than a single
     cross-validation fold. The fit and evaluation steps are wrapped in
-    Logfire spans, capturing their duration separately.
+    Logfire spans, capturing their duration separately. The fitted encoder
+    and scaler are persisted alongside the model, so the inference layer can
+    apply the exact same fitted transformations to new data.
 
     Args:
         X_train_full (pd.DataFrame): The full training/CV feature matrix.
         y_train_full (pd.Series): The full training/CV target labels.
         X_test (pd.DataFrame): The held-out test feature matrix.
         y_test (pd.Series): The held-out test target labels.
+        encoder (OneHotEncoder): The OneHotEncoder fitted on the full
+            training/CV data, as returned by `preprocess_test_set`.
+        scaler (StandardScaler | None): The StandardScaler fitted on the
+            full training/CV data, or None if scaling was not applied.
         model_builder (Callable[..., BaseEstimator]): A factory function that
             returns a fresh, unfitted model instance.
         model_params (dict): Keyword arguments passed to `model_builder`.
@@ -143,6 +152,8 @@ def train_final_model(
 
     log_final_run(
         model=model,
+        encoder=encoder,
+        scaler=scaler,
         params=model_params,
         metrics=metrics,
         y_test=y_test,

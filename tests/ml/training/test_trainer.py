@@ -6,11 +6,12 @@ isolation from real scikit-learn models and MLflow.
 
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from ml.dataset.split import Fold
 from ml.training.trainer import run_cross_validation, train_final_model
@@ -189,11 +190,16 @@ def test_train_final_model_computes_metrics_on_test_set(
     X_test = pd.DataFrame({"feature": range(2)})
     y_test = pd.Series([0, 1])
 
+    fake_encoder = MagicMock(spec=OneHotEncoder)
+    fake_scaler = MagicMock(spec=StandardScaler)
+
     train_final_model(
         X_train_full=X_train_full,
         y_train_full=y_train_full,
         X_test=X_test,
         y_test=y_test,
+        encoder=fake_encoder,
+        scaler=fake_scaler,
         model_builder=fake_model_builder,
         model_params={},
         experiment_name="test_experiment",
@@ -217,11 +223,16 @@ def test_train_final_model_fits_on_full_training_data(
     X_test = pd.DataFrame({"feature": range(2)})
     y_test = pd.Series([0, 1])
 
+    fake_encoder = MagicMock(spec=OneHotEncoder)
+    fake_scaler = MagicMock(spec=StandardScaler)
+
     model, _ = train_final_model(
         X_train_full=X_train_full,
         y_train_full=y_train_full,
         X_test=X_test,
         y_test=y_test,
+        encoder=fake_encoder,
+        scaler=fake_scaler,
         model_builder=fake_model_builder,
         model_params={},
         experiment_name="test_experiment",
@@ -246,11 +257,16 @@ def test_train_final_model_returns_fitted_model_and_metrics(
     X_test = pd.DataFrame({"feature": range(2)})
     y_test = pd.Series([0, 1])
 
+    fake_encoder = MagicMock(spec=OneHotEncoder)
+    fake_scaler = MagicMock(spec=StandardScaler)
+
     model, metrics = train_final_model(
         X_train_full=X_train_full,
         y_train_full=y_train_full,
         X_test=X_test,
         y_test=y_test,
+        encoder=fake_encoder,
+        scaler=fake_scaler,
         model_builder=fake_model_builder,
         model_params={},
         experiment_name="test_experiment",

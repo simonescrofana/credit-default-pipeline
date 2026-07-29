@@ -111,7 +111,7 @@ def scale_features(
 
     Returns:
         tuple[pd.DataFrame, StandardScaler]: The transformed DataFrame and
-        the (possibly newly fitted) scaler.
+            the (possibly newly fitted) scaler.
 
     """
     logger.info("Scaling numeric feature columns...")
@@ -167,14 +167,24 @@ def preprocess_train_folds(folds: list[Fold], scale: bool = True) -> list[Fold]:
 
 def preprocess_test_set(
     df_train_full: pd.DataFrame, df_test: pd.DataFrame, scale: bool = True
-) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
+) -> tuple[
+    pd.DataFrame,
+    pd.Series,
+    pd.DataFrame,
+    pd.Series,
+    OneHotEncoder,
+    StandardScaler | None,
+]:
     """Preprocess the final holdout test set using full training data.
 
     Fit missing-value handling, categorical encoding, and (optionally) feature
     scaling on the entire training/cross-validation block, then apply the same
     fitted transformations to the held-out test set. This must be called only
     after model selection is complete, using the full pre-test data rather than
-    a single cross-validation fold.
+    a single cross-validation fold. The fitted encoder (and scaler, if used)
+    are also returned so they can be persisted alongside the final model,
+    since the inference layer must apply the exact same fitted transformations
+    to new data rather than refitting them.
 
     Args:
         df_train_full (pd.DataFrame): The full training/CV DataFrame (the
@@ -186,9 +196,11 @@ def preprocess_test_set(
             `True`.
 
     Returns:
-        tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
-            `(X_train_full, y_train_full, X_test, y_test)`, ready for a final
-            model fit and evaluation.
+        tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, OneHotEncoder,
+        StandardScaler | None]:
+            `(X_train_full, y_train_full, X_test, y_test, encoder, scaler)`,
+            ready for a final model fit and evaluation. `scaler` is `None`
+            if `scale=False` (e.g. for tree-based models like XGBoost).
 
     """
     y_train_full = df_train_full[TARGET_COLUMN]
@@ -200,8 +212,9 @@ def preprocess_test_set(
     X_train_full, encoder = handle_missing_and_encode(X_train_full)
     X_test, _ = handle_missing_and_encode(X_test, encoder=encoder)
 
+    scaler = None
     if scale:
         X_train_full, scaler = scale_features(X_train_full)
         X_test, _ = scale_features(X_test, scaler=scaler)
 
-    return X_train_full, y_train_full, X_test, y_test
+    return X_train_full, y_train_full, X_test, y_test, encoder, scaler

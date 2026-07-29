@@ -14,6 +14,7 @@ import mlflow.sklearn
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,8 @@ def log_fold_run(
 
 def log_final_run(
     model: BaseEstimator,
+    encoder: OneHotEncoder,
+    scaler: StandardScaler | None,
     params: dict,
     metrics: dict[str, float],
     y_test: pd.Series,
@@ -96,14 +99,22 @@ def log_final_run(
 ) -> None:
     """Log the final model, fitted on the full training/CV data, as an MLflow run.
 
-    Unlike ``log_fold_run``, this also logs the fitted model itself as an
-    artifact, since this is the model intended for downstream inference. Also
-    logs the raw test set predictions as a CSV artifact, so threshold tuning
-    and ROC/PR curves on the holdout test set can be reconstructed later
-    without rerunning inference.
+    Unlike `log_fold_run`, this also logs the fitted model, the fitted
+    OneHotEncoder, and (if used) the fitted StandardScaler as artifacts,
+    since this is the model intended for downstream inference — the
+    inference layer must apply the exact same fitted transformations used
+    during training, never refitting them on new data. Also logs the raw
+    test set predictions as a CSV artifact, so threshold tuning and ROC/PR
+    curves on the holdout test set can be reconstructed later without
+    rerunning inference.
 
     Args:
         model (BaseEstimator): The final fitted model.
+        encoder (OneHotEncoder): The OneHotEncoder fitted on the full
+            training/CV data.
+        scaler (StandardScaler | None): The StandardScaler fitted on the
+            full training/CV data, or None if scaling was not applied
+            (e.g. for tree-based models like XGBoost).
         params (dict): The hyperparameters used to build the model.
         metrics (dict[str, float]): The computed test set metrics.
         y_test (pd.Series): The true holdout test target labels.
@@ -115,7 +126,11 @@ def log_final_run(
         mlflow.log_param("model_class", type(model).__name__)
         mlflow.log_params(params)
         mlflow.log_metrics(metrics)
+
         mlflow.sklearn.log_model(model, name="model")
+        mlflow.sklearn.log_model(encoder, name="encoder")
+        if scaler is not None:
+            mlflow.sklearn.log_model(scaler, name="scaler")
 
         predictions_df = pd.DataFrame(
             {"y_true": y_test.values, "y_pred_proba": y_pred_proba}
@@ -125,4 +140,4 @@ def log_final_run(
             "/tmp/final_model_predictions.csv", artifact_path="predictions"
         )
 
-    logger.info("Logged final MLflow run with model artifact.")
+    logger.info("Logged final MLflow run with model, encoder, and scaler artifacts.")

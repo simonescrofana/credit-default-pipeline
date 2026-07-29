@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from ml.dataset.split import Fold
 from ml.run_training import FinalSplit, ModelConfig, main, prepare_training_data
@@ -93,11 +94,15 @@ def test_prepare_training_data_wires_pipeline_together(
     fake_y_train = pd.Series([0, 1])
     fake_X_test = pd.DataFrame({"feature": [3]})
     fake_y_test = pd.Series([0])
+    fake_encoder = MagicMock(spec=OneHotEncoder)
+    fake_scaler = MagicMock(spec=StandardScaler)
     mock_preprocess_test_set.return_value = (
         fake_X_train,
         fake_y_train,
         fake_X_test,
         fake_y_test,
+        fake_encoder,
+        fake_scaler,
     )
 
     train_folds, final_split = prepare_training_data(scale=True)
@@ -113,7 +118,8 @@ def test_prepare_training_data_wires_pipeline_together(
 
     assert train_folds == synthetic_folds
     assert final_split == FinalSplit(
-        fake_X_train, fake_y_train, fake_X_test, fake_y_test
+        fake_X_train, fake_y_train, fake_X_test, fake_y_test,
+        fake_encoder, fake_scaler
     )
 
 
@@ -135,7 +141,10 @@ def test_main_trains_only_selected_models(
     """Verify main() trains only the experiment listed in models_to_train."""
     # force the iterability of mock_model_configs
     mock_model_configs.__iter__.return_value = iter(fake_model_configs)
-    mock_prepare_training_data.return_value = ([], FinalSplit(None, None, None, None))
+    mock_prepare_training_data.return_value = (
+        [],
+        FinalSplit(None, None, None, None, None, None),
+    )
 
     main(models_to_train=["baseline"])
 
@@ -163,7 +172,10 @@ def test_main_trains_all_models_when_none_selected(
 ) -> None:
     """Verify main() trains every configured model when models_to_train is None."""
     mock_model_configs.__iter__.return_value = iter(fake_model_configs)
-    mock_prepare_training_data.return_value = ([], FinalSplit(None, None, None, None))
+    mock_prepare_training_data.return_value = (
+        [],
+        FinalSplit(None, None, None, None, None, None),
+    )
 
     main(models_to_train=None)
 

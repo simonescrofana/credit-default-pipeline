@@ -278,7 +278,7 @@ def test_preprocess_test_set_returns_expected_shapes(
     synthetic_train_df, synthetic_val_df
 ) -> None:
     """Verify that preprocess_test_set returns well-shaped, target-free features."""
-    X_train_full, y_train_full, X_test, y_test = preprocess_test_set(
+    X_train_full, y_train_full, X_test, y_test, _, _ = preprocess_test_set(
         synthetic_train_df, synthetic_val_df
     )
 
@@ -309,7 +309,7 @@ def test_preprocess_test_set_fits_only_on_train(
     own mean forced to 0.
 
     """
-    X_train_full, _, X_test, _ = preprocess_test_set(
+    X_train_full, _, X_test, _, _, _ = preprocess_test_set(
         synthetic_train_df, synthetic_val_df
     )
 
