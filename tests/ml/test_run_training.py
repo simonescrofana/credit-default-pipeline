@@ -118,8 +118,7 @@ def test_prepare_training_data_wires_pipeline_together(
 
     assert train_folds == synthetic_folds
     assert final_split == FinalSplit(
-        fake_X_train, fake_y_train, fake_X_test, fake_y_test,
-        fake_encoder, fake_scaler
+        fake_X_train, fake_y_train, fake_X_test, fake_y_test, fake_encoder, fake_scaler
     )
 
 
