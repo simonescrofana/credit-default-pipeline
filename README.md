@@ -56,6 +56,10 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 * **Choice:** Aggregating per-fold validation metrics with a mean weighted by each fold's validation set size, while confusion matrix counts (true/false positives/negatives) are summed rather than averaged.
 * **Justification:** `TimeSeriesSplit`'s expanding window produces folds of unequal size, so an unweighted mean would give a small, less reliable early fold the same influence as a large, more reliable later one. Confusion matrix counts are absolute quantities tied to fold size; averaging them (weighted or not) yields a number with no clear interpretation, while summing preserves their meaning as a total across the full cross-validation run, since each row is scored exactly once.
 
+#### Structural Typing over a Shared Model Base Class
+* **Choice:** Defining an `Estimator` structural protocol (`fit`/`predict_proba`) that scikit-learn estimators and a custom PyTorch wrapper both satisfy implicitly, rather than forcing a shared base class or inheritance hierarchy across model families.
+* **Justification:** scikit-learn and PyTorch models have fundamentally different internals (a declarative `.fit()` call versus a manual training loop); requiring a common base class would either constrain scikit-learn's own class hierarchy or force an artificial wrapper on it. Structural typing lets the training orchestrator depend only on the shape of the interface, keeping both model families and the orchestrator itself decoupled from one another.
+
 #### Modern Python Tooling (`uv` + Ruff)
 * **Choice:** Moving away from standard `pip`/`venv` and selecting `uv` as the exclusive dependency manager alongside Ruff for quality gating.
 * **Justification:** `uv` provides blazing-fast environment synchronization and strict, deterministic lockfile management, eliminating the "it works on my machine" anti-pattern in production containers. Ruff guarantees lightning-fast code linting and formatting compliance natively during pre-commit and CI stages.
@@ -128,45 +132,45 @@ insolvency_prediction_project/
 │   │   │   ├── companies_snapshot.sql
 │   │   │   └── energy_contracts_snapshot.sql
 │   │   ├── tests/
-│   │   │   ├── marts/
-│   │   │   │   ├── dim_companies/
-│   │   │   │   │   ├── dim_companies_no_overlapping_windows.sql
-│   │   │   │   │   └── dim_companies_single_current_version.sql
-│   │   │   │   ├── dim_date/
-│   │   │   │   │   └── dim_date_no_gaps.sql
-│   │   │   │   └── fct_company_credit_profile/
-│   │   │   │       ├── fct_company_key_temporal_correctness.sql
-│   │   │   │       ├── fct_no_dropped_spine_rows.sql
-│   │   │   │       └── fct_no_unexpected_nulls.sql
-│   │   │   └── intermediate/
-│   │   │       ├── int_billing_trailing_90d/
-│   │   │       │   ├── int_billing_trailing_90d_debt_ratio_match.sql
-│   │   │       │   ├── int_billing_trailing_90d_dpd_consistency.sql
-│   │   │       │   └── int_billing_trailing_90d_no_future_leakage.sql
-│   │   │       ├── int_companies_scd_resolved/
-│   │   │       │   ├── int_companies_scd_resolved_chronology.sql
-│   │   │       │   ├── int_companies_scd_resolved_expired_versions.sql
-│   │   │       │   └── int_companies_scd_resolved_leakage.sql
-│   │   │       ├── int_company_date_spine/
-│   │   │       │   ├── int_company_date_spine_no_dates_before_foundation.sql
-│   │   │       │   ├── int_company_date_spine_no_future_dates.sql
-│   │   │       │   ├── int_company_date_spine_np_gaps.sql
-│   │   │       │   └── int_company_date_spine_respects_valid_to.sql
-│   │   │       ├── int_contracts_asof/
-│   │   │       │   ├── int_contracts_asof_count_flag_consistency.sql
-│   │   │       │   └── int_contracts_asof_no_future_leakage.sql
-│   │   │       ├── int_financial_asof/
-│   │   │       │   ├── int_financial_asof_publication_delay_leakage.sql
-│   │   │       │   └── int_financial_asof_rank_recency.sql
-│   │   │       ├── int_insolvency_label/
-│   │   │       │   ├── int_insolvency_label_false_negative.sql
-│   │   │       │   └── int_insolvency_label_false_positive.sql
-│   │   │       ├── int_logins_trailing/
-│   │   │       │   ├── int_logins_trailing_null_consistency.sql
-│   │   │       │   ├── int_logins_trailing_recency_boundary.sql
-│   │   │       │   └── int_logins_trailing_velocity_coherence.sql
-│   │   │       └── int_tickets_trailing_90d/
-│   │   │           └── int_tickets_trailing_90d_no_future_leakage.sql
+│   │   │   ├── intermediate/
+│   │   │   │   ├── int_billing_trailing_90d/
+│   │   │   │   │   ├── int_billing_trailing_90d_debt_ratio_match.sql
+│   │   │   │   │   ├── int_billing_trailing_90d_dpd_consistency.sql
+│   │   │   │   │   └── int_billing_trailing_90d_no_future_leakage.sql
+│   │   │   │   ├── int_companies_scd_resolved/
+│   │   │   │   │   ├── int_companies_scd_resolved_chronology.sql
+│   │   │   │   │   ├── int_companies_scd_resolved_expired_versions.sql
+│   │   │   │   │   └── int_companies_scd_resolved_leakage.sql
+│   │   │   │   ├── int_company_date_spine/
+│   │   │   │   │   ├── int_company_date_spine_no_dates_before_foundation.sql
+│   │   │   │   │   ├── int_company_date_spine_no_future_dates.sql
+│   │   │   │   │   ├── int_company_date_spine_np_gaps.sql
+│   │   │   │   │   └── int_company_date_spine_respects_valid_to.sql
+│   │   │   │   ├── int_contracts_asof/
+│   │   │   │   │   ├── int_contracts_asof_count_flag_consistency.sql
+│   │   │   │   │   └── int_contracts_asof_no_future_leakage.sql
+│   │   │   │   ├── int_financial_asof/
+│   │   │   │   │   ├── int_financial_asof_publication_delay_leakage.sql
+│   │   │   │   │   └── int_financial_asof_rank_recency.sql
+│   │   │   │   ├── int_insolvency_label/
+│   │   │   │   │   ├── int_insolvency_label_false_negative.sql
+│   │   │   │   │   └── int_insolvency_label_false_positive.sql
+│   │   │   │   ├── int_logins_trailing/
+│   │   │   │   │   ├── int_logins_trailing_null_consistency.sql
+│   │   │   │   │   ├── int_logins_trailing_recency_boundary.sql
+│   │   │   │   │   └── int_logins_trailing_velocity_coherence.sql
+│   │   │   │   └── int_tickets_trailing_90d/
+│   │   │   │       └── int_tickets_trailing_90d_no_future_leakage.sql
+│   │   │   └── marts/
+│   │   │       ├── dim_companies/
+│   │   │       │   ├── dim_companies_no_overlapping_windows.sql
+│   │   │       │   └── dim_companies_single_current_version.sql
+│   │   │       ├── dim_date/
+│   │   │       │   └── dim_date_no_gaps.sql
+│   │   │       └── fct_company_credit_profile/
+│   │   │           ├── fct_company_key_temporal_correctness.sql
+│   │   │           ├── fct_no_dropped_spine_rows.sql
+│   │   │           └── fct_no_unexpected_nulls.sql
 │   │   ├── .envrc
 │   │   ├── .envrc.example
 │   │   ├── .gitignore
@@ -215,10 +219,17 @@ insolvency_prediction_project/
 │   │   └── split.py
 │   ├── evaluation/
 │   │   ├── __init__.py
-│   │   └── metrics.py
+│   │   ├── metrics.py
+│   │   └── plots.ipynb
+│   ├── inference/
+│   │   ├── __init__.py
+│   │   ├── model_loader.py
+│   │   └── predictor.py
 │   ├── models/
 │   │   ├── __init__.py
-│   │   └── baseline.py
+│   │   ├── baseline.py
+│   │   ├── mlp.py
+│   │   └── protocol.py
 │   ├── training/
 │   │   ├── __init__.py
 │   │   ├── mlflow_utils.py
@@ -254,9 +265,14 @@ insolvency_prediction_project/
 │   │   ├── evaluation/
 │   │   │   ├── __init__.py
 │   │   │   └── test_metrics.py
+│   │   ├── inference/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_model_loader.py
+│   │   │   └── test_predictor.py
 │   │   ├── models/
 │   │   │   ├── __init__.py
-│   │   │   └── test_baseline.py
+│   │   │   ├── test_baseline.py
+│   │   │   └── test_mlp.py
 │   │   ├── training/
 │   │   │   ├── __init__.py
 │   │   │   └── test_trainer.py
