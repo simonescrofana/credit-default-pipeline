@@ -128,7 +128,9 @@ def test_prepare_training_data_wires_pipeline_together(
 @patch("ml.run_training.prepare_training_data")
 @patch("ml.run_training.mlflow.set_tracking_uri")
 @patch("ml.run_training.setup_logging")
+@patch("ml.run_training.mlflow.start_run")
 def test_main_trains_only_selected_models(
+    mock_start_run,
     mock_setup_logging,
     mock_set_tracking_uri,
     mock_prepare_training_data,
@@ -160,7 +162,9 @@ def test_main_trains_only_selected_models(
 @patch("ml.run_training.prepare_training_data")
 @patch("ml.run_training.mlflow.set_tracking_uri")
 @patch("ml.run_training.setup_logging")
+@patch("ml.run_training.mlflow.start_run")
 def test_main_trains_all_models_when_none_selected(
+    mock_start_run,
     mock_setup_logging,
     mock_set_tracking_uri,
     mock_prepare_training_data,
@@ -188,7 +192,9 @@ def test_main_trains_all_models_when_none_selected(
 @patch("ml.run_training.prepare_training_data")
 @patch("ml.run_training.mlflow.set_tracking_uri")
 @patch("ml.run_training.setup_logging")
+@patch("ml.run_training.mlflow.start_run")
 def test_main_trains_nothing_when_selection_matches_no_config(
+    mock_start_run,
     mock_setup_logging,
     mock_set_tracking_uri,
     mock_prepare_training_data,

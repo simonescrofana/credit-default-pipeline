@@ -16,6 +16,9 @@ import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from ml.models.mlp import MLPClassifier
+from ml.models.protocol import Estimator
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +46,7 @@ def timestamped_run_name(base_name: str) -> str:
 
 
 def log_fold_run(
-    model: BaseEstimator,
+    model: Estimator,
     params: dict,
     metrics: dict[str, float],
     fold_index: int,
@@ -60,7 +63,7 @@ def log_fold_run(
     be reconstructed later without refitting the model.
 
     Args:
-        model (BaseEstimator): The fitted model for this fold (used only to
+        model (Estimator): The fitted model for this fold (used only to
             infer its class name for logging context, not persisted).
         params (dict): The hyperparameters used to build the model.
         metrics (dict[str, float]): The computed validation metrics for this
@@ -72,24 +75,23 @@ def log_fold_run(
             fold's validation split.
 
     """
-    with mlflow.start_run(run_name=f"fold_{fold_index}", nested=True):
-        mlflow.log_param("model_class", type(model).__name__)
-        mlflow.log_params(params)
-        mlflow.log_metrics(metrics)
+    mlflow.log_param("model_class", type(model).__name__)
+    mlflow.log_params(params)
+    mlflow.log_metrics(metrics)
 
-        predictions_df = pd.DataFrame(
-            {"y_true": y_val.values, "y_pred_proba": y_pred_proba}
-        )
-        predictions_df.to_csv(f"/tmp/fold_{fold_index}_predictions.csv", index=False)
-        mlflow.log_artifact(
-            f"/tmp/fold_{fold_index}_predictions.csv", artifact_path="predictions"
-        )
+    predictions_df = pd.DataFrame(
+        {"y_true": y_val.values, "y_pred_proba": y_pred_proba}
+    )
+    predictions_df.to_csv(f"/tmp/fold_{fold_index}_predictions.csv", index=False)
+    mlflow.log_artifact(
+        f"/tmp/fold_{fold_index}_predictions.csv", artifact_path="predictions"
+    )
 
     logger.info("Logged MLflow run for fold %d.", fold_index)
 
 
 def log_final_run(
-    model: BaseEstimator,
+    model: Estimator,
     encoder: OneHotEncoder,
     scaler: StandardScaler | None,
     params: dict,
@@ -109,7 +111,7 @@ def log_final_run(
     rerunning inference.
 
     Args:
-        model (BaseEstimator): The final fitted model.
+        model (Estimator): The final fitted model.
         encoder (OneHotEncoder): The OneHotEncoder fitted on the full
             training/CV data.
         scaler (StandardScaler | None): The StandardScaler fitted on the
@@ -122,22 +124,29 @@ def log_final_run(
             holdout test set.
 
     """
-    with mlflow.start_run(run_name=timestamped_run_name("final_model")):
-        mlflow.log_param("model_class", type(model).__name__)
-        mlflow.log_params(params)
-        mlflow.log_metrics(metrics)
+    mlflow.log_param("model_class", type(model).__name__)
+    mlflow.log_params(params)
+    mlflow.log_metrics(metrics)
 
+    if isinstance(model, BaseEstimator):
         mlflow.sklearn.log_model(model, name="model")
-        mlflow.sklearn.log_model(encoder, name="encoder")
-        if scaler is not None:
-            mlflow.sklearn.log_model(scaler, name="scaler")
+    elif isinstance(model, MLPClassifier):
+        # the serialization_format bypass the data example typically required in input
+        mlflow.pytorch.log_model(
+            model.network, name="model", serialization_format="pickle"
+        )
+    else:
+        logger.error("Unrecognized model type: %s", type(model).__name__)
+        raise TypeError(f"Cannot log model of type {type(model).__name__}")
 
-        predictions_df = pd.DataFrame(
-            {"y_true": y_test.values, "y_pred_proba": y_pred_proba}
-        )
-        predictions_df.to_csv("/tmp/final_model_predictions.csv", index=False)
-        mlflow.log_artifact(
-            "/tmp/final_model_predictions.csv", artifact_path="predictions"
-        )
+    mlflow.sklearn.log_model(encoder, name="encoder")
+    if scaler is not None:
+        mlflow.sklearn.log_model(scaler, name="scaler")
+
+    predictions_df = pd.DataFrame(
+        {"y_true": y_test.values, "y_pred_proba": y_pred_proba}
+    )
+    predictions_df.to_csv("/tmp/final_model_predictions.csv", index=False)
+    mlflow.log_artifact("/tmp/final_model_predictions.csv", artifact_path="predictions")
 
     logger.info("Logged final MLflow run with model, encoder, and scaler artifacts.")

@@ -7,17 +7,18 @@ the overall and per-fold level, is captured via Logfire spans.
 
 """
 
+import inspect
 import logging
 from collections.abc import Callable
 
 import logfire
 import mlflow
 import pandas as pd
-from sklearn.base import BaseEstimator
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from ml.dataset.split import Fold
 from ml.evaluation.metrics import aggregate_fold_metrics, compute_metrics
+from ml.models.protocol import Estimator
 from ml.training.mlflow_utils import log_final_run, log_fold_run, timestamped_run_name
 
 logger = logging.getLogger(__name__)
@@ -25,10 +26,9 @@ logger = logging.getLogger(__name__)
 
 def run_cross_validation(
     folds: list[Fold],
-    model_builder: Callable[..., BaseEstimator],
+    model_builder: Callable[..., Estimator],
     model_params: dict,
     experiment_name: str,
-    threshold: float = 0.5,
 ) -> list[dict[str, float]]:
     """Train and evaluate a model across all cross-validation folds.
 
@@ -42,16 +42,13 @@ def run_cross_validation(
 
     Args:
         folds (list[Fold]): The preprocessed cross-validation folds.
-        model_builder (Callable[..., BaseEstimator]): A factory function that
+        model_builder (Callable[..., Estimator]): A factory function that
             returns a fresh, unfitted model instance (e.g.
             `build_baseline_model`).
         model_params (dict): Keyword arguments passed to `model_builder` on
             every call.
         experiment_name (str): The MLflow experiment to log runs under (one
             experiment per model family, e.g. `"baseline"`).
-        threshold (float): The value of the classification threshold. In
-            `evaluation/plots.ipynb` the optimal value is computed maximizing
-            `F2-score` on aggregated CV folds. Defaults to 0.5.
 
     Returns:
         list[dict[str, float]]: The computed metrics for each fold, in fold order.
@@ -67,20 +64,31 @@ def run_cross_validation(
         with mlflow.start_run(run_name=timestamped_run_name("cross_validation")):
             for i, fold in enumerate(folds, start=1):
                 with logfire.span("fold_training", fold_index=i):
-                    model = model_builder(**model_params)
-                    model.fit(fold.X_train, fold.y_train)
+                    with mlflow.start_run(run_name=f"fold_{i}", nested=True):
+                        model = model_builder(**model_params)
 
-                    y_pred_proba = model.predict_proba(fold.X_val)[:, 1]
-                    metrics = compute_metrics(fold.y_val, y_pred_proba, threshold)
+                        fit_params = inspect.signature(model.fit).parameters
+                        if "X_val" in fit_params:
+                            model.fit(
+                                fold.X_train,
+                                fold.y_train,
+                                X_val=fold.X_val,
+                                y_val=fold.y_val,
+                            )
+                        else:
+                            model.fit(fold.X_train, fold.y_train)
 
-                    log_fold_run(
-                        model=model,
-                        params=model_params,
-                        metrics=metrics,
-                        fold_index=i,
-                        y_val=fold.y_val,
-                        y_pred_proba=y_pred_proba,
-                    )
+                        y_pred_proba = model.predict_proba(fold.X_val)[:, 1]
+                        metrics = compute_metrics(fold.y_val, y_pred_proba)
+
+                        log_fold_run(
+                            model=model,
+                            params=model_params,
+                            metrics=metrics,
+                            fold_index=i,
+                            y_val=fold.y_val,
+                            y_pred_proba=y_pred_proba,
+                        )
 
                 fold_metrics.append(metrics)
                 fold_sizes.append(len(fold.y_val))
@@ -101,11 +109,11 @@ def train_final_model(
     y_test: pd.Series,
     encoder: OneHotEncoder,
     scaler: StandardScaler | None,
-    model_builder: Callable[..., BaseEstimator],
+    model_builder: Callable[..., Estimator],
     model_params: dict,
     experiment_name: str,
     threshold: float = 0.5,
-) -> tuple[BaseEstimator, dict[str, float]]:
+) -> tuple[Estimator, dict[str, float]]:
     """Fit and evaluate the final model on the full training/CV and test data.
 
     This must be called only after model selection and hyperparameter tuning
@@ -124,7 +132,7 @@ def train_final_model(
             training/CV data, as returned by `preprocess_test_set`.
         scaler (StandardScaler | None): The StandardScaler fitted on the
             full training/CV data, or None if scaling was not applied.
-        model_builder (Callable[..., BaseEstimator]): A factory function that
+        model_builder (Callable[..., Estimator]): A factory function that
             returns a fresh, unfitted model instance.
         model_params (dict): Keyword arguments passed to `model_builder`.
         experiment_name (str): The MLflow experiment to log this run under
@@ -143,22 +151,23 @@ def train_final_model(
     mlflow.set_experiment(experiment_name)
 
     with logfire.span("final_model_fit"):
-        model = model_builder(**model_params)
-        model.fit(X_train_full, y_train_full)
+        with mlflow.start_run(run_name=timestamped_run_name("final_model")):
+            model = model_builder(**model_params)
+            model.fit(X_train_full, y_train_full)
 
-    with logfire.span("final_model_evaluation"):
-        y_pred_proba = model.predict_proba(X_test)[:, 1]
-        metrics = compute_metrics(y_test, y_pred_proba, threshold)
+            with logfire.span("final_model_evaluation"):
+                y_pred_proba = model.predict_proba(X_test)[:, 1]
+                metrics = compute_metrics(y_test, y_pred_proba, threshold)
 
-    log_final_run(
-        model=model,
-        encoder=encoder,
-        scaler=scaler,
-        params=model_params,
-        metrics=metrics,
-        y_test=y_test,
-        y_pred_proba=y_pred_proba,
-    )
+            log_final_run(
+                model=model,
+                encoder=encoder,
+                scaler=scaler,
+                params=model_params,
+                metrics=metrics,
+                y_test=y_test,
+                y_pred_proba=y_pred_proba,
+            )
 
     logger.info("Final model evaluated on the holdout test set. Metrics: %s", metrics)
     return model, metrics

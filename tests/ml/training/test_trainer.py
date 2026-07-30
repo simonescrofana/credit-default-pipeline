@@ -74,10 +74,122 @@ class FakeModel:
         return np.column_stack([np.full(n, 0.4), np.full(n, 0.6)])
 
 
+# ==============================================================================
+# These classes are used for tests on the logic that decides to accept (or not)
+# validation data during fit (when it's possible). In order to keep code clean
+# this should be refactored
+# ==============================================================================
+class FakeModelWithValidation:
+    """A fit-compatible model whose fit() accepts validation data (e.g., MLP).
+
+    Attributes:
+        instances_created (int): Class variable tracking instantiation count.
+        fit_called_with (dict | None): Dictionary storing fit arguments
+            ``{"X": X, "y": y, "X_val": X_val, "y_val": y_val}``, or ``None`` if
+            ``fit`` was not called.
+
+    """
+
+    instances_created = 0
+
+    def __init__(self, **kwargs) -> None:
+        """Initialize a FakeModelWithValidation instance.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments passed to simulate model
+                hyperparameters.
+
+        """
+        FakeModelWithValidation.instances_created += 1
+        self.fit_called_with = None
+
+    def fit(self, X, y, X_val=None, y_val=None):
+        """Record training and validation data arguments and return the estimator.
+
+        Args:
+            X: Training feature matrix.
+            y: Training target vector.
+            X_val (optional): Validation feature matrix. Defaults to ``None``.
+            y_val (optional): Validation target vector. Defaults to ``None``.
+
+        Returns:
+            FakeModelWithValidation: The fitted estimator instance itself.
+
+        """
+        self.fit_called_with = {"X": X, "y": y, "X_val": X_val, "y_val": y_val}
+        return self
+
+    def predict_proba(self, X):
+        """Return fixed probability predictions of shape (len(X), 2).
+
+        Args:
+            X: Feature matrix to predict probabilities for.
+
+        Returns:
+            np.ndarray: A 2D array with fixed probabilities ``[0.4, 0.6]``.
+
+        """
+        n = len(X)
+        return np.column_stack([np.full(n, 0.4), np.full(n, 0.6)])
+
+
+class FakeModelWithoutValidation:
+    """A fit-compatible model whose fit() only accepts X, y (e.g. sklearn-style).
+
+    Attributes:
+        instances_created (int): Class variable tracking instantiation count.
+        fit_called_with (dict | None): Dictionary storing positional fit arguments
+            ``{"X": X, "y": y}``, or ``None`` if ``fit`` was not called.
+
+    """
+
+    instances_created = 0
+
+    def __init__(self, **kwargs) -> None:
+        """Initialize a FakeModelWithoutValidation instance.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments passed to simulate model
+                hyperparameters.
+
+        """
+        FakeModelWithoutValidation.instances_created += 1
+        self.fit_called_with = None
+
+    def fit(self, X, y):
+        """Record positional fit arguments and return the estimator instance.
+
+        Args:
+            X: Feature matrix.
+            y: Target vector.
+
+        Returns:
+            FakeModelWithoutValidation: The fitted estimator instance itself.
+
+        """
+        self.fit_called_with = {"X": X, "y": y}
+        return self
+
+    def predict_proba(self, X):
+        """Return fixed probability predictions of shape (len(X), 2).
+
+        Args:
+            X: Feature matrix to predict probabilities for.
+
+        Returns:
+            np.ndarray: A 2D array with fixed probabilities ``[0.4, 0.6]``.
+
+        """
+        n = len(X)
+        return np.column_stack([np.full(n, 0.4), np.full(n, 0.6)])
+
+
 @pytest.fixture(autouse=True)
 def reset_fake_model_counter() -> None:
-    """Reset the FakeModel instance counter before each test."""
+    """Reset all the FakeModel instances counter before each test."""
     FakeModel.instances_created = 0
+    FakeModelWithValidation.instances_created = 0
+    FakeModelWithoutValidation.instances_created = 0
 
 
 def fake_model_builder(**kwargs) -> FakeModel:
@@ -107,7 +219,9 @@ def synthetic_folds() -> list[Fold]:
 @patch("ml.training.trainer.mlflow.set_experiment")
 @patch("ml.training.trainer.log_fold_run")
 @patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
 def test_run_cross_validation_builds_one_model_per_fold(
+    mock_start_run,
     mock_compute_metrics,
     mock_log_fold_run,
     mock_set_experiment,
@@ -129,7 +243,9 @@ def test_run_cross_validation_builds_one_model_per_fold(
 @patch("ml.training.trainer.mlflow.set_experiment")
 @patch("ml.training.trainer.log_fold_run")
 @patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
 def test_run_cross_validation_computes_metrics_on_validation_split(
+    mock_start_run,
     mock_compute_metrics,
     mock_log_fold_run,
     mock_set_experiment,
@@ -157,7 +273,9 @@ def test_run_cross_validation_computes_metrics_on_validation_split(
 @patch("ml.training.trainer.mlflow.set_experiment")
 @patch("ml.training.trainer.log_fold_run")
 @patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
 def test_run_cross_validation_returns_one_metrics_dict_per_fold(
+    mock_start_run,
     mock_compute_metrics,
     mock_log_fold_run,
     mock_set_experiment,
@@ -179,8 +297,9 @@ def test_run_cross_validation_returns_one_metrics_dict_per_fold(
 @patch("ml.training.trainer.mlflow.set_experiment")
 @patch("ml.training.trainer.log_final_run")
 @patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
 def test_train_final_model_computes_metrics_on_test_set(
-    mock_compute_metrics, mock_log_final_run, mock_set_experiment
+    mock_start_run, mock_compute_metrics, mock_log_final_run, mock_set_experiment
 ) -> None:
     """Verify compute_metrics is called with y_test, not y_train_full."""
     mock_compute_metrics.return_value = {"auc_roc": 0.7}
@@ -212,8 +331,9 @@ def test_train_final_model_computes_metrics_on_test_set(
 @patch("ml.training.trainer.mlflow.set_experiment")
 @patch("ml.training.trainer.log_final_run")
 @patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
 def test_train_final_model_fits_on_full_training_data(
-    mock_compute_metrics, mock_log_final_run, mock_set_experiment
+    mock_start_run, mock_compute_metrics, mock_log_final_run, mock_set_experiment
 ) -> None:
     """Verify the model is fitted on the full train/CV data, not a single fold."""
     mock_compute_metrics.return_value = {"auc_roc": 0.7}
@@ -246,8 +366,9 @@ def test_train_final_model_fits_on_full_training_data(
 @patch("ml.training.trainer.mlflow.set_experiment")
 @patch("ml.training.trainer.log_final_run")
 @patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
 def test_train_final_model_returns_fitted_model_and_metrics(
-    mock_compute_metrics, mock_log_final_run, mock_set_experiment
+    mock_start_run, mock_compute_metrics, mock_log_final_run, mock_set_experiment
 ) -> None:
     """Verify the function returns the fitted model instance and its metrics."""
     mock_compute_metrics.return_value = {"auc_roc": 0.7}
@@ -274,3 +395,118 @@ def test_train_final_model_returns_fitted_model_and_metrics(
 
     assert isinstance(model, FakeModel)
     assert metrics == {"auc_roc": 0.7}
+
+
+@patch("ml.training.trainer.mlflow.set_experiment")
+@patch("ml.training.trainer.log_fold_run")
+@patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
+def test_run_cross_validation_passes_validation_data_when_fit_accepts_it(
+    mock_start_run,
+    mock_compute_metrics,
+    mock_log_fold_run,
+    mock_set_experiment,
+    synthetic_folds: list[Fold],
+) -> None:
+    """Verify X_val/y_val are passed to fit() when its signature supports them."""
+    mock_compute_metrics.return_value = {"auc_roc": 0.5}
+
+    run_cross_validation(
+        folds=synthetic_folds,
+        model_builder=FakeModelWithValidation,
+        model_params={},
+        experiment_name="test_experiment",
+    )
+
+    # inspect the single model instance created for the one fold
+    assert FakeModelWithValidation.instances_created == 3
+
+
+@patch("ml.training.trainer.mlflow.set_experiment")
+@patch("ml.training.trainer.log_fold_run")
+@patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
+def test_run_cross_validation_fit_receives_actual_validation_fold_data(
+    mock_start_run,
+    mock_compute_metrics,
+    mock_log_fold_run,
+    mock_set_experiment,
+    synthetic_folds: list[Fold],
+) -> None:
+    """Verify the X_val/y_val passed to fit() are the fold's own val data, not None."""
+    mock_compute_metrics.return_value = {"auc_roc": 0.5}
+
+    captured_models = []
+
+    def capturing_builder(**kwargs):
+        model = FakeModelWithValidation(**kwargs)
+        captured_models.append(model)
+        return model
+
+    run_cross_validation(
+        folds=synthetic_folds,
+        model_builder=capturing_builder,
+        model_params={},
+        experiment_name="test_experiment",
+    )
+
+    fit_args = captured_models[0].fit_called_with
+    pd.testing.assert_frame_equal(fit_args["X_val"], synthetic_folds[0].X_val)
+    pd.testing.assert_series_equal(fit_args["y_val"], synthetic_folds[0].y_val)
+
+
+@patch("ml.training.trainer.mlflow.set_experiment")
+@patch("ml.training.trainer.log_fold_run")
+@patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
+def test_run_cross_validation_does_not_pass_validation_data_when_fit_lacks_support(
+    mock_start_run,
+    mock_compute_metrics,
+    mock_log_fold_run,
+    mock_set_experiment,
+    synthetic_folds: list[Fold],
+) -> None:
+    """Verify fit() is called with only X, y when its signature has no X_val/y_val."""
+    mock_compute_metrics.return_value = {"auc_roc": 0.5}
+
+    captured_models = []
+
+    def capturing_builder(**kwargs):
+        model = FakeModelWithoutValidation(**kwargs)
+        captured_models.append(model)
+        return model
+
+    run_cross_validation(
+        folds=synthetic_folds,
+        model_builder=capturing_builder,
+        model_params={},
+        experiment_name="test_experiment",
+    )
+
+    fit_args = captured_models[0].fit_called_with
+    assert set(fit_args.keys()) == {"X", "y"}
+
+
+@patch("ml.training.trainer.log_fold_run")
+@patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
+def test_run_cross_validation_opens_run_before_fit(
+    mock_start_run, mock_compute_metrics, mock_log_fold_run, synthetic_folds: list[Fold]
+) -> None:
+    mock_compute_metrics.return_value = {"auc_roc": 0.5}
+
+    call_order = []
+    fake_model = MagicMock()
+    fake_model.fit.side_effect = lambda *a, **kw: call_order.append("fit")
+    mock_start_run.return_value.__enter__.side_effect = lambda: call_order.append(
+        "start_run"
+    )
+
+    run_cross_validation(
+        folds=synthetic_folds,
+        model_builder=lambda **kw: fake_model,
+        model_params={},
+        experiment_name="test_experiment",
+    )
+
+    assert call_order == ["start_run"] + ["start_run", "fit"] * len(synthetic_folds)

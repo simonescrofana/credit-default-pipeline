@@ -11,7 +11,6 @@ from typing import NamedTuple
 
 import mlflow
 import pandas as pd
-from sklearn.base import BaseEstimator
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from config import settings
@@ -20,6 +19,16 @@ from ml.dataset.loader import load_data
 from ml.dataset.preprocessing import preprocess_test_set, preprocess_train_folds
 from ml.dataset.split import Fold, train_val_test_split
 from ml.models.baseline import build_baseline_model
+from ml.models.mlp import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_DROPOUT,
+    DEFAULT_EPOCHS,
+    DEFAULT_HIDDEN_LAYERS,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_WEIGHT_DECAY,
+    build_mlp_model,
+)
+from ml.models.protocol import Estimator
 from ml.training.trainer import run_cross_validation, train_final_model
 from utils.logging_utils import setup_logging
 
@@ -56,7 +65,7 @@ class ModelConfig(NamedTuple):
         experiment_name (str): The MLflow experiment name for this model
             family (e.g. "baseline"). Also used to select which models to
             train via `main(models_to_train=...)`.
-        model_builder (Callable[..., BaseEstimator]): A factory function that
+        model_builder (Callable[..., Estimator]): A factory function that
             returns a fresh, unfitted model instance.
         model_params (dict): Keyword arguments passed to `model_builder`.
         scale (bool): Whether this model family requires scaled features
@@ -69,7 +78,7 @@ class ModelConfig(NamedTuple):
     """
 
     experiment_name: str
-    model_builder: Callable[..., BaseEstimator]
+    model_builder: Callable[..., Estimator]
     model_params: dict
     scale: bool
     threshold: float = 0.5
@@ -88,7 +97,22 @@ MODEL_CONFIGS = [
         # optimal threshold, see plots.ipynb (F2-optimal on aggregated CV folds)
         threshold=0.5047,
     ),
-    # future entries: xgboost (scale=False), mlp (scale=True)
+    ModelConfig(
+        experiment_name="mlp",
+        model_builder=build_mlp_model,
+        model_params={
+            "hidden_layers": DEFAULT_HIDDEN_LAYERS,
+            "dropout": DEFAULT_DROPOUT,
+            "epochs": DEFAULT_EPOCHS,
+            "batch_size": DEFAULT_BATCH_SIZE,
+            "learning_rate": DEFAULT_LEARNING_RATE,
+            "weight_decay": DEFAULT_WEIGHT_DECAY,
+            "pos_weight": 5.25,
+        },
+        scale=True,
+        threshold=0.5,
+    ),
+    # future entries: xgboost (scale=False)
 ]
 
 
@@ -155,7 +179,6 @@ def main(models_to_train: list[str] | None = None) -> None:
             model_builder=config.model_builder,
             model_params=config.model_params,
             experiment_name=config.experiment_name,
-            threshold=config.threshold,
         )
 
         train_final_model(
@@ -173,4 +196,6 @@ def main(models_to_train: list[str] | None = None) -> None:
 
 
 if __name__ == "__main__":
-    main(models_to_train=["baseline"])
+    # main(models_to_train=["baseline"]) # to train only baseline model
+    main(models_to_train=["mlp"])  # to train only the MLP model
+    # main() # to train all models

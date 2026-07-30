@@ -24,6 +24,7 @@ dependencies = [
     "scikit-learn>=1.9.0",
     "skops>=0.14.0",
     "sqlalchemy>=2.0.51",
+    "torch>=2.13.0",
 ]
 
 [tool.ruff]
@@ -58,6 +59,7 @@ omit = [
     "config.py",
     "utils/logging_utils.py",
     "ml/training/mlflow_utils.py",
+    "ml/models/protocol.py",
 ]
 
 [tool.coverage.report]
