@@ -18,17 +18,24 @@ from database.connection import get_db
 from ml.dataset.loader import load_data
 from ml.dataset.preprocessing import preprocess_test_set, preprocess_train_folds
 from ml.dataset.split import Fold, train_val_test_split
-from ml.models.baseline import build_baseline_model
+from ml.models.baseline import DEFAULT_C, DEFAULT_MAX_ITER, build_baseline_model
 from ml.models.mlp import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DROPOUT,
     DEFAULT_EPOCHS,
     DEFAULT_HIDDEN_LAYERS,
-    DEFAULT_LEARNING_RATE,
+    DEFAULT_LEARNING_RATE_MLP,
     DEFAULT_WEIGHT_DECAY,
     build_mlp_model,
 )
 from ml.models.protocol import Estimator
+from ml.models.xgboost import (
+    DEFAULT_EVAL_METRIC,
+    DEFAULT_LEARNING_RATE_XGB,
+    DEFAULT_MAX_DEPTH,
+    DEFAULT_N_ESTIMATORS,
+    build_xgboost_model,
+)
 from ml.training.trainer import run_cross_validation, train_final_model
 from utils.logging_utils import setup_logging
 
@@ -71,6 +78,12 @@ class ModelConfig(NamedTuple):
         scale (bool): Whether this model family requires scaled features
             (True for linear models and the MLP, False for tree-based models
             like XGBoost, which are scale-invariant).
+        handle_nan (bool): Whether to create informative missing
+            value flags and apply group-specific fallback constants. Set to
+            ``False`` for model families with native missing value handling
+            (e.g. XGBoost), which learn the optimal split direction for
+            missing data directly rather than relying on an explicit
+            imputation strategy.
         threshold (float, optional): The value of the classification threshold. In
             `evaluation/plots.ipynb` the optimal value is computed maximizing
             `F2-score` on aggregated CV folds. Defaults to 0.5.
@@ -81,6 +94,7 @@ class ModelConfig(NamedTuple):
     model_builder: Callable[..., Estimator]
     model_params: dict
     scale: bool
+    handle_nan: bool
     threshold: float = 0.5
 
 
@@ -89,11 +103,11 @@ MODEL_CONFIGS = [
         experiment_name="baseline",
         model_builder=build_baseline_model,
         model_params={
-            "C": 1.0,
-            "class_weight": "balanced",
-            "max_iter": 1000,
+            "C": DEFAULT_C,
+            "max_iter": DEFAULT_MAX_ITER,
         },
         scale=True,
+        handle_nan=True,
         # optimal threshold, see plots.ipynb (F2-optimal on aggregated CV folds)
         threshold=0.5047,
     ),
@@ -105,19 +119,35 @@ MODEL_CONFIGS = [
             "dropout": DEFAULT_DROPOUT,
             "epochs": DEFAULT_EPOCHS,
             "batch_size": DEFAULT_BATCH_SIZE,
-            "learning_rate": DEFAULT_LEARNING_RATE,
+            "learning_rate": DEFAULT_LEARNING_RATE_MLP,
             "weight_decay": DEFAULT_WEIGHT_DECAY,
             "pos_weight": 5.25,
         },
         scale=True,
+        handle_nan=True,
         # optimal threshold, see plots.ipynb (F2-optimal on aggregated CV folds)
         threshold=0.0496,
     ),
-    # future entries: xgboost (scale=False)
+    ModelConfig(
+        experiment_name="xgboost",
+        model_builder=build_xgboost_model,
+        model_params={
+            "n_estimators": DEFAULT_N_ESTIMATORS,
+            "max_depth": DEFAULT_MAX_DEPTH,
+            "learning_rate": DEFAULT_LEARNING_RATE_XGB,
+            "scale_pos_weight": 5.25,
+            "eval_metric": DEFAULT_EVAL_METRIC,
+        },
+        scale=False,
+        handle_nan=False,
+        threshold=0.5,
+    ),
 ]
 
 
-def prepare_training_data(scale: bool) -> tuple[list[Fold], FinalSplit]:
+def prepare_training_data(
+    scale: bool, handle_nan: bool = True
+) -> tuple[list[Fold], FinalSplit]:
     """Load, split, and preprocess the star schema data for training.
 
     Encapsulates the full data preparation pipeline: loading the star schema
@@ -128,6 +158,12 @@ def prepare_training_data(scale: bool) -> tuple[list[Fold], FinalSplit]:
     Args:
         scale (bool): Whether to apply feature scaling, required for the
             baseline and MLP models but not for XGBoost.
+        handle_nan (bool, optional): Whether to create informative missing
+            value flags and apply group-specific fallback constants. Set to
+            ``False`` for model families with native missing value handling
+            (e.g. XGBoost), which learn the optimal split direction for
+            missing data directly rather than relying on an explicit
+            imputation strategy. Defaults to ``True``.
 
     Returns:
         tuple[list[Fold], FinalSplit]: The preprocessed cross-validation
@@ -140,9 +176,11 @@ def prepare_training_data(scale: bool) -> tuple[list[Fold], FinalSplit]:
     dataset = load_data(session)
     train_folds, df_remaining, df_test = train_val_test_split(df=dataset)
 
-    train_folds = preprocess_train_folds(folds=train_folds, scale=scale)
+    train_folds = preprocess_train_folds(
+        folds=train_folds, scale=scale, handle_nan=handle_nan
+    )
     X_train, y_train, X_test, y_test, encoder, scaler = preprocess_test_set(
-        df_train_full=df_remaining, df_test=df_test, scale=scale
+        df_train_full=df_remaining, df_test=df_test, scale=scale, handle_nan=handle_nan
     )
 
     return train_folds, FinalSplit(X_train, y_train, X_test, y_test, encoder, scaler)
@@ -173,7 +211,9 @@ def main(models_to_train: list[str] | None = None) -> None:
 
         logger.info("Starting training for experiment '%s'...", config.experiment_name)
 
-        train_folds, final_split = prepare_training_data(scale=config.scale)
+        train_folds, final_split = prepare_training_data(
+            scale=config.scale, handle_nan=config.handle_nan
+        )
 
         run_cross_validation(
             folds=train_folds,

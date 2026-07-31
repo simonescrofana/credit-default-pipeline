@@ -24,7 +24,7 @@ DEFAULT_HIDDEN_LAYERS = (64, 32, 16, 8)
 DEFAULT_DROPOUT = 0.3
 DEFAULT_EPOCHS = 25
 DEFAULT_BATCH_SIZE = 1024
-DEFAULT_LEARNING_RATE = 1e-4
+DEFAULT_LEARNING_RATE_MLP = 1e-4
 DEFAULT_WEIGHT_DECAY = 1e-3
 
 
@@ -88,7 +88,7 @@ class MLPClassifier:
         dropout: float = DEFAULT_DROPOUT,
         epochs: int = DEFAULT_EPOCHS,
         batch_size: int = DEFAULT_BATCH_SIZE,
-        learning_rate: float = DEFAULT_LEARNING_RATE,
+        learning_rate: float = DEFAULT_LEARNING_RATE_MLP,
         weight_decay: float = DEFAULT_WEIGHT_DECAY,
         pos_weight: float = 1.0,
     ) -> None:
@@ -105,7 +105,7 @@ class MLPClassifier:
             batch_size (int, optional): Mini-batch size for AdamW optimization.
                 Defaults to ``DEFAULT_BATCH_SIZE``.
             learning_rate (float, optional): Learning rate for the AdamW optimizer.
-                Defaults to ``DEFAULT_LEARNING_RATE``.
+                Defaults to ``DEFAULT_LEARNING_RATE_MLP``.
             weight_decay (float, optional): L2 penalty factor for parameter updates.
                 Defaults to ``DEFAULT_WEIGHT_DECAY``.
             pos_weight (float, optional): Weight scaling applied to the positive
@@ -272,7 +272,7 @@ def build_mlp_model(
     dropout: float = DEFAULT_DROPOUT,
     epochs: int = DEFAULT_EPOCHS,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    learning_rate: float = DEFAULT_LEARNING_RATE,
+    learning_rate: float = DEFAULT_LEARNING_RATE_MLP,
     weight_decay: float = DEFAULT_WEIGHT_DECAY,
     pos_weight: float = 1.0,
 ) -> MLPClassifier:
@@ -292,7 +292,7 @@ def build_mlp_model(
         batch_size (int, optional): The mini-batch size. Defaults to
             ``DEFAULT_BATCH_SIZE``.
         learning_rate (float, optional): The AdamW learning rate. Defaults
-            to ``DEFAULT_LEARNING_RATE``.
+            to ``DEFAULT_LEARNING_RATE_MLP``.
         weight_decay (float, optional): The AdamW weight decay (L2
             regularization). Defaults to ``DEFAULT_WEIGHT_DECAY``.
         pos_weight (float, optional): The positive class weight for

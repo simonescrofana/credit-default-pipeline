@@ -46,7 +46,7 @@ NUMERIC_COLS_TO_SCALE = [
 
 
 def handle_missing_and_encode(
-    df: pd.DataFrame, encoder: OneHotEncoder | None = None
+    df: pd.DataFrame, encoder: OneHotEncoder | None = None, handle_nan: bool = True
 ) -> tuple[pd.DataFrame, OneHotEncoder]:
     """Handle informative missing values and one-hot encode categorical columns.
 
@@ -60,6 +60,12 @@ def handle_missing_and_encode(
         encoder (OneHotEncoder | None, optional): A previously fitted encoder.
             If ``None``, a new encoder is fitted on ``df``. Defaults to
             ``None``.
+        handle_nan (bool, optional): Whether to create informative missing
+            value flags and apply group-specific fallback constants. Set to
+            ``False`` for model families with native missing value handling
+            (e.g. XGBoost), which learn the optimal split direction for
+            missing data directly rather than relying on an explicit
+            imputation strategy. Defaults to ``True``.
 
     Returns:
         tuple[pd.DataFrame, OneHotEncoder]: The transformed DataFrame and the
@@ -69,13 +75,14 @@ def handle_missing_and_encode(
     logger.info("Handling missing values and encoding categorical columns...")
     df = df.copy()
 
-    df["has_recent_financials"] = df[FINANCIAL_COLS].notna().all(axis=1).astype(int)
-    df["has_login_activity"] = df[LOGIN_COLS].notna().all(axis=1).astype(int)
-    df["has_recent_satisfaction_score"] = df[SATISFACTION_COL].notna().astype(int)
+    if handle_nan:
+        df["has_recent_financials"] = df[FINANCIAL_COLS].notna().all(axis=1).astype(int)
+        df["has_login_activity"] = df[LOGIN_COLS].notna().all(axis=1).astype(int)
+        df["has_recent_satisfaction_score"] = df[SATISFACTION_COL].notna().astype(int)
 
-    df[FINANCIAL_COLS] = df[FINANCIAL_COLS].fillna(FINANCIAL_FALLBACK)
-    df[LOGIN_COLS] = df[LOGIN_COLS].fillna(LOGIN_FALLBACK)
-    df[SATISFACTION_COL] = df[SATISFACTION_COL].fillna(SATISFACTION_FALLBACK)
+        df[FINANCIAL_COLS] = df[FINANCIAL_COLS].fillna(FINANCIAL_FALLBACK)
+        df[LOGIN_COLS] = df[LOGIN_COLS].fillna(LOGIN_FALLBACK)
+        df[SATISFACTION_COL] = df[SATISFACTION_COL].fillna(SATISFACTION_FALLBACK)
 
     if encoder is None:
         logger.info("No encoder provided, fitting a new OneHotEncoder...")
@@ -128,7 +135,9 @@ def scale_features(
     return df, scaler
 
 
-def preprocess_train_folds(folds: list[Fold], scale: bool = True) -> list[Fold]:
+def preprocess_train_folds(
+    folds: list[Fold], scale: bool = True, handle_nan: bool = True
+) -> list[Fold]:
     """Orchestrate the full preprocessing pipeline across cross-validation folds.
 
     For each fold, fit missing-value handling and categorical encoding on the
@@ -142,6 +151,12 @@ def preprocess_train_folds(folds: list[Fold], scale: bool = True) -> list[Fold]:
         scale (bool, optional): Whether to apply feature scaling, required
             for the baseline and PyTorch models but not for XGBoost. Defaults
             to ``True``.
+        handle_nan (bool, optional): Whether to create informative missing
+            value flags and apply group-specific fallback constants. Set to
+            ``False`` for model families with native missing value handling
+            (e.g. XGBoost), which learn the optimal split direction for
+            missing data directly rather than relying on an explicit
+            imputation strategy. Defaults to ``True``.
 
     Returns:
         list[Fold]: The list of preprocessed folds, ready for model training.
@@ -151,8 +166,12 @@ def preprocess_train_folds(folds: list[Fold], scale: bool = True) -> list[Fold]:
     processed_folds = []
 
     for i, fold in enumerate(folds, start=1):
-        X_train, encoder = handle_missing_and_encode(fold.X_train)
-        X_val, _ = handle_missing_and_encode(fold.X_val, encoder=encoder)
+        X_train, encoder = handle_missing_and_encode(
+            fold.X_train, handle_nan=handle_nan
+        )
+        X_val, _ = handle_missing_and_encode(
+            fold.X_val, encoder=encoder, handle_nan=handle_nan
+        )
 
         if scale:
             X_train, scaler = scale_features(X_train)
@@ -166,7 +185,10 @@ def preprocess_train_folds(folds: list[Fold], scale: bool = True) -> list[Fold]:
 
 
 def preprocess_test_set(
-    df_train_full: pd.DataFrame, df_test: pd.DataFrame, scale: bool = True
+    df_train_full: pd.DataFrame,
+    df_test: pd.DataFrame,
+    scale: bool = True,
+    handle_nan: bool = True,
 ) -> tuple[
     pd.DataFrame,
     pd.Series,
@@ -194,6 +216,12 @@ def preprocess_test_set(
             target still combined.
         scale (bool, optional): Whether to apply feature scaling. Defaults to
             `True`.
+        handle_nan (bool, optional): Whether to create informative missing
+            value flags and apply group-specific fallback constants. Set to
+            ``False`` for model families with native missing value handling
+            (e.g. XGBoost), which learn the optimal split direction for
+            missing data directly rather than relying on an explicit
+            imputation strategy. Defaults to ``True``.
 
     Returns:
         tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, OneHotEncoder,
@@ -209,8 +237,12 @@ def preprocess_test_set(
     X_train_full = df_train_full.drop(columns=TARGET_COLUMN)
     X_test = df_test.drop(columns=TARGET_COLUMN)
 
-    X_train_full, encoder = handle_missing_and_encode(X_train_full)
-    X_test, _ = handle_missing_and_encode(X_test, encoder=encoder)
+    X_train_full, encoder = handle_missing_and_encode(
+        X_train_full, handle_nan=handle_nan
+    )
+    X_test, _ = handle_missing_and_encode(
+        X_test, encoder=encoder, handle_nan=handle_nan
+    )
 
     scaler = None
     if scale:

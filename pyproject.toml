@@ -25,6 +25,7 @@ dependencies = [
     "skops>=0.14.0",
     "sqlalchemy>=2.0.51",
     "torch>=2.13.0",
+    "xgboost>=3.3.0",
 ]
 
 [tool.ruff]

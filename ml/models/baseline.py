@@ -10,11 +10,14 @@ from sklearn.linear_model import LogisticRegression
 
 RANDOM_STATE = 202607
 
+DEFAULT_C = 1.0
+DEFAULT_MAX_ITER = 1000
+
 
 def build_baseline_model(
-    C: float = 1.0,
+    C: float = DEFAULT_C,
     class_weight: str | dict = "balanced",
-    max_iter: int = 1000,
+    max_iter: int = DEFAULT_MAX_ITER,
 ) -> LogisticRegression:
     """Build a baseline Logistic Regression model using the SAGA solver.
 
@@ -25,7 +28,7 @@ def build_baseline_model(
     Args:
         l1_ratio (float, optional): The ElasticNet mixing parameter. Set to
             `0.0` for L2 penalty, `1.0` for L1 penalty, or a value in
-            between for a combination. Defaults to `0.0`.
+            between for a combination. Defaults to ``DEFAULT_C``.
         C (float, optional): Inverse of regularization strength; smaller values
             specify stronger regularization. Defaults to `1.0`.
         class_weight (str | dict, optional): Weights associated with classes.
@@ -33,7 +36,7 @@ def build_baseline_model(
             weights inversely proportional to class frequencies. Defaults to
             `"balanced"`.
         max_iter (int, optional): Maximum number of iterations taken for the
-            solvers to converge. Defaults to `1000`.
+            solvers to converge. Defaults to ``DEFAULT_MAX_ITER``.
 
     Returns:
         LogisticRegression: An un-fitted scikit-learn `LogisticRegression`
