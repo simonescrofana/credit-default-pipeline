@@ -110,7 +110,8 @@ MODEL_CONFIGS = [
             "pos_weight": 5.25,
         },
         scale=True,
-        threshold=0.5,
+        # optimal threshold, see plots.ipynb (F2-optimal on aggregated CV folds)
+        threshold=0.0496,
     ),
     # future entries: xgboost (scale=False)
 ]

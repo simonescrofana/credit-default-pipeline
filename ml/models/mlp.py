@@ -22,10 +22,10 @@ RANDOM_STATE = 202607
 
 DEFAULT_HIDDEN_LAYERS = (64, 32, 16, 8)
 DEFAULT_DROPOUT = 0.3
-DEFAULT_EPOCHS = 150
-DEFAULT_BATCH_SIZE = 512
-DEFAULT_LEARNING_RATE = 1e-3
-DEFAULT_WEIGHT_DECAY = 1e-4
+DEFAULT_EPOCHS = 25
+DEFAULT_BATCH_SIZE = 1024
+DEFAULT_LEARNING_RATE = 1e-4
+DEFAULT_WEIGHT_DECAY = 1e-3
 
 
 class _MLPNetwork(nn.Module):
@@ -201,6 +201,7 @@ class MLPClassifier:
                 logits = self.network(X_batch)
                 loss = criterion(logits, y_batch)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.network.parameters(), max_norm=1.0)
                 optimizer.step()
 
                 epoch_loss += loss.item() * X_batch.size(0)
