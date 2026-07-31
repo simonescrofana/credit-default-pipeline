@@ -216,7 +216,7 @@ def test_scale_features_reuses_fitted_scaler(
     assert not np.allclose(val_scaled[NUMERIC_COLS_TO_SCALE].mean(), 0, atol=1e-8)
 
 
-def test_scale_features_excludes_non_numeric_columns(synthetic_train_df):
+def test_scale_features_excludes_non_numeric_columns(synthetic_train_df) -> None:
     """Verify that boolean and one-hot encoded columns are left untouched by scaling."""
     encoded_df, _ = handle_missing_and_encode(synthetic_train_df)
     scaled_df, _ = scale_features(encoded_df)

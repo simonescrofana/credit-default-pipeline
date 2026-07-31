@@ -6,6 +6,7 @@ isolation from real scikit-learn models and MLflow.
 
 """
 
+from typing import Self
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -74,11 +75,6 @@ class FakeModel:
         return np.column_stack([np.full(n, 0.4), np.full(n, 0.6)])
 
 
-# ==============================================================================
-# These classes are used for tests on the logic that decides to accept (or not)
-# validation data during fit (when it's possible). In order to keep code clean
-# this should be refactored
-# ==============================================================================
 class FakeModelWithValidation:
     """A fit-compatible model whose fit() accepts validation data (e.g., MLP).
 
@@ -103,7 +99,7 @@ class FakeModelWithValidation:
         FakeModelWithValidation.instances_created += 1
         self.fit_called_with = None
 
-    def fit(self, X, y, X_val=None, y_val=None):
+    def fit(self, X, y, X_val=None, y_val=None) -> Self:
         """Record training and validation data arguments and return the estimator.
 
         Args:
@@ -119,7 +115,7 @@ class FakeModelWithValidation:
         self.fit_called_with = {"X": X, "y": y, "X_val": X_val, "y_val": y_val}
         return self
 
-    def predict_proba(self, X):
+    def predict_proba(self, X) -> np.ndarray:
         """Return fixed probability predictions of shape (len(X), 2).
 
         Args:
@@ -156,7 +152,7 @@ class FakeModelWithoutValidation:
         FakeModelWithoutValidation.instances_created += 1
         self.fit_called_with = None
 
-    def fit(self, X, y):
+    def fit(self, X, y) -> Self:
         """Record positional fit arguments and return the estimator instance.
 
         Args:
@@ -170,7 +166,146 @@ class FakeModelWithoutValidation:
         self.fit_called_with = {"X": X, "y": y}
         return self
 
-    def predict_proba(self, X):
+    def predict_proba(self, X) -> np.ndarray:
+        """Return fixed probability predictions of shape (len(X), 2).
+
+        Args:
+            X: Feature matrix to predict probabilities for.
+
+        Returns:
+            np.ndarray: A 2D array with fixed probabilities ``[0.4, 0.6]``.
+
+        """
+        n = len(X)
+        return np.column_stack([np.full(n, 0.4), np.full(n, 0.6)])
+
+
+class FakeModelWithEvalSet:
+    """A fit-compatible model whose fit() accepts eval_set (e.g., XGBoost).
+
+    Attributes:
+        instances_created (int): Class variable tracking instantiation count.
+        fit_called_with (dict | None): Dictionary storing fit arguments
+            ``{"X": X, "y": y, "eval_set": eval_set}``, or ``None`` if
+            ``fit`` was not called.
+
+    """
+
+    instances_created = 0
+
+    def __init__(self, **kwargs) -> None:
+        """Initialize a FakeModelWithEvalSet instance.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments passed to simulate model
+                hyperparameters.
+
+        """
+        FakeModelWithEvalSet.instances_created += 1
+        self.fit_called_with = None
+
+    def fit(self, X, y, eval_set=None, verbose=False) -> Self:
+        """Record training data and eval_set arguments and return the estimator.
+
+        Args:
+            X: Training feature matrix.
+            y: Training target vector.
+            eval_set (optional): List of (X_val, y_val) tuples used for
+                XGBoost-style early stopping. Defaults to ``None``.
+
+        Returns:
+            FakeModelWithEvalSet: The fitted estimator instance itself.
+
+        """
+        self.fit_called_with = {
+            "X": X,
+            "y": y,
+            "eval_set": eval_set,
+            "verbose": verbose,
+        }
+        return self
+
+    def predict_proba(self, X) -> np.ndarray:
+        """Return fixed probability predictions of shape (len(X), 2).
+
+        Args:
+            X: Feature matrix to predict probabilities for.
+
+        Returns:
+            np.ndarray: A 2D array with fixed probabilities ``[0.4, 0.6]``.
+
+        """
+        n = len(X)
+        return np.column_stack([np.full(n, 0.4), np.full(n, 0.6)])
+
+
+class FakeModelWithEarlyStopping:
+    """A fit-compatible model exposing get_params/set_params with early_stopping_rounds.
+
+    Mirrors XGBClassifier's sklearn-compatible interface for the specific
+    behavior of exposing an ``early_stopping_rounds`` hyperparameter that
+    trainer.py must disable before the final fit (which has no eval_set).
+
+    Attributes:
+        instances_created (int): Class variable tracking instantiation count.
+        set_params_called_with (dict | None): Arguments passed to the most
+            recent ``set_params`` call, or ``None`` if never called.
+
+    """
+
+    instances_created = 0
+
+    def __init__(self, **kwargs) -> None:
+        """Initialize a FakeModelWithEarlyStopping instance.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments passed to simulate model
+                hyperparameters; ``early_stopping_rounds`` defaults to 20 if
+                not provided.
+
+        """
+        FakeModelWithEarlyStopping.instances_created += 1
+        self.early_stopping_rounds = kwargs.get("early_stopping_rounds", 20)
+        self.set_params_called_with = None
+
+    def get_params(self) -> dict:
+        """Return the model's hyperparameters, mirroring sklearn's get_params.
+
+        Returns:
+            dict: A dict containing the current ``early_stopping_rounds``.
+
+        """
+        return {"early_stopping_rounds": self.early_stopping_rounds}
+
+    def set_params(self, **kwargs) -> Self:
+        """Update hyperparameters and record the call, mirroring sklearn's set_params.
+
+        Args:
+            **kwargs: Hyperparameters to update.
+
+        Returns:
+            FakeModelWithEarlyStopping: self.
+
+        """
+        self.set_params_called_with = kwargs
+        if "early_stopping_rounds" in kwargs:
+            self.early_stopping_rounds = kwargs["early_stopping_rounds"]
+        return self
+
+    def fit(self, X, y) -> Self:
+        """Return self without recording any state, since this fake targets set_params.
+
+        Args:
+            X: Training feature matrix.
+            y: Training target vector.
+
+        Returns:
+            FakeModelWithEarlyStopping: self.
+
+        """
+        return self
+
+    def predict_proba(self, X) -> np.ndarray:
         """Return fixed probability predictions of shape (len(X), 2).
 
         Args:
@@ -510,3 +645,135 @@ def test_run_cross_validation_opens_run_before_fit(
     )
 
     assert call_order == ["start_run"] + ["start_run", "fit"] * len(synthetic_folds)
+
+
+@patch("ml.training.trainer.mlflow.set_experiment")
+@patch("ml.training.trainer.log_final_run")
+@patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
+def test_train_final_model_skips_early_stopping_check_when_unsupported(
+    mock_start_run,
+    mock_compute_metrics,
+    mock_log_final_run,
+    mock_set_experiment,
+    synthetic_folds: list[Fold],
+) -> None:
+    """Verify models without get_params are fitted without any AttributeError.
+
+    FakeModel deliberately has no get_params/set_params, mirroring the
+    baseline and MLP models. This confirms the early-stopping check in
+    trainer.py is properly guarded (e.g. via hasattr) rather than assuming
+    every model exposes sklearn's get_params interface.
+
+    """
+    mock_compute_metrics.return_value = {"auc_roc": 0.5}
+    fold = synthetic_folds[0]
+
+    fake_encoder = MagicMock(spec=OneHotEncoder)
+    fake_scaler = MagicMock(spec=StandardScaler)
+
+    assert not hasattr(FakeModel, "get_params")
+
+    model, metrics = train_final_model(
+        X_train_full=fold.X_train,
+        y_train_full=fold.y_train,
+        X_test=fold.X_val,
+        y_test=fold.y_val,
+        encoder=fake_encoder,
+        scaler=fake_scaler,
+        model_builder=fake_model_builder,
+        model_params={},
+        experiment_name="test_experiment",
+    )
+
+    assert isinstance(model, FakeModel)
+    assert metrics == {"auc_roc": 0.5}
+
+
+@patch("ml.training.trainer.mlflow.set_experiment")
+@patch("ml.training.trainer.log_fold_run")
+@patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
+def test_run_cross_validation_eval_set_contains_actual_validation_fold_data(
+    mock_start_run,
+    mock_compute_metrics,
+    mock_log_fold_run,
+    mock_set_experiment,
+    synthetic_folds: list[Fold],
+) -> None:
+    """Verify eval_set passed to fit() matches each fold's own validation data.
+
+    Uses a capturing builder to retrieve the specific model instance created
+    for each fold, so the eval_set it actually received can be inspected —
+    counting instances alone would not catch eval_set being missing, empty,
+    or containing the wrong fold's data.
+
+    """
+    mock_compute_metrics.return_value = {"auc_roc": 0.5}
+
+    captured_models = []
+
+    def capturing_builder(**kwargs):
+        model = FakeModelWithEvalSet(**kwargs)
+        captured_models.append(model)
+        return model
+
+    run_cross_validation(
+        folds=synthetic_folds,
+        model_builder=capturing_builder,
+        model_params={},
+        experiment_name="test_experiment",
+    )
+
+    for model, fold in zip(captured_models, synthetic_folds, strict=True):
+        eval_set = model.fit_called_with["eval_set"]
+
+        assert eval_set is not None
+        assert len(eval_set) == 1
+
+        eval_X, eval_y = eval_set[0]
+        pd.testing.assert_frame_equal(eval_X, fold.X_val)
+        pd.testing.assert_series_equal(eval_y, fold.y_val)
+
+
+@patch("ml.training.trainer.mlflow.set_experiment")
+@patch("ml.training.trainer.log_final_run")
+@patch("ml.training.trainer.compute_metrics")
+@patch("ml.training.trainer.mlflow.start_run")
+def test_train_final_model_disables_early_stopping_when_model_supports_it(
+    mock_start_run,
+    mock_compute_metrics,
+    mock_log_final_run,
+    mock_set_experiment,
+    synthetic_folds: list[Fold],
+) -> None:
+    """Verify early_stopping_rounds is set to None before the final fit, when supported.
+
+    Reuses synthetic_folds[0]'s data as the final train/test split, since
+    train_final_model does not take a list of folds but the same shape of
+    feature/target data. FakeModelWithEarlyStopping mirrors XGBClassifier's
+    get_params/set_params interface, allowing this test to verify trainer.py
+    actually calls set_params(early_stopping_rounds=None) before the fit
+    that has no eval_set to give — not just that no error was raised.
+
+    """
+    mock_compute_metrics.return_value = {"auc_roc": 0.5}
+    fold = synthetic_folds[0]
+
+    fake_encoder = MagicMock(spec=OneHotEncoder)
+    fake_scaler = MagicMock(spec=StandardScaler)
+
+    model, _ = train_final_model(
+        X_train_full=fold.X_train,
+        y_train_full=fold.y_train,
+        X_test=fold.X_val,
+        y_test=fold.y_val,
+        encoder=fake_encoder,
+        scaler=fake_scaler,
+        model_builder=lambda **kw: FakeModelWithEarlyStopping(**kw),
+        model_params={},
+        experiment_name="test_experiment",
+    )
+
+    assert model.set_params_called_with == {"early_stopping_rounds": None}
+    assert model.early_stopping_rounds is None

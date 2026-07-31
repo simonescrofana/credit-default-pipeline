@@ -75,6 +75,13 @@ def run_cross_validation(
                                 X_val=fold.X_val,
                                 y_val=fold.y_val,
                             )
+                        elif "eval_set" in fit_params:
+                            model.fit(
+                                fold.X_train,
+                                fold.y_train,
+                                eval_set=[(fold.X_val, fold.y_val)],
+                                verbose=False,
+                            )
                         else:
                             model.fit(fold.X_train, fold.y_train)
 
@@ -153,6 +160,12 @@ def train_final_model(
     with logfire.span("final_model_fit"):
         with mlflow.start_run(run_name=timestamped_run_name("final_model")):
             model = model_builder(**model_params)
+
+            if (
+                hasattr(model, "get_params")
+                and "early_stopping_rounds" in model.get_params()
+            ):
+                model.set_params(early_stopping_rounds=None)
             model.fit(X_train_full, y_train_full)
 
             with logfire.span("final_model_evaluation"):

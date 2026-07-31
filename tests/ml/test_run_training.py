@@ -50,12 +50,21 @@ def fake_model_configs() -> list[ModelConfig]:
             model_builder=MagicMock(),
             model_params={},
             scale=True,
+            handle_nan=True,
         ),
         ModelConfig(
             experiment_name="mock_model",
             model_builder=MagicMock(),
             model_params={},
             scale=False,
+            handle_nan=True,
+        ),
+        ModelConfig(
+            experiment_name="mock_xgboost",
+            model_builder=MagicMock(),
+            model_params={},
+            scale=False,
+            handle_nan=False,
         ),
     ]
 
@@ -110,10 +119,13 @@ def test_prepare_training_data_wires_pipeline_together(
     mock_load_data.assert_called_once_with(fake_session_generator)
     mock_train_val_test_split.assert_called_once_with(df=fake_dataset)
     mock_preprocess_train_folds.assert_called_once_with(
-        folds=synthetic_folds, scale=True
+        folds=synthetic_folds, scale=True, handle_nan=True
     )
     mock_preprocess_test_set.assert_called_once_with(
-        df_train_full=fake_df_remaining, df_test=fake_df_test, scale=True
+        df_train_full=fake_df_remaining,
+        df_test=fake_df_test,
+        scale=True,
+        handle_nan=True,
     )
 
     assert train_folds == synthetic_folds

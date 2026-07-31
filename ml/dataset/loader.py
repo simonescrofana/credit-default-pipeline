@@ -26,7 +26,6 @@ QUERY = """
         f.cash_to_debt_ratio,
         f.net_profit_margin,
         f.ebitda,
-        f.avg_dpd_trailing_90d,
         f.unpaid_ratio_trailing_90d,
         f.total_outstanding_debt,
         f.days_since_last_login,

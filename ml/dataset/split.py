@@ -121,7 +121,7 @@ def generate_cv_folds(df: pd.DataFrame, n_splits: int = N_CV_SPLITS) -> list[Fol
 
 def train_val_test_split(
     df: pd.DataFrame, n_test_months: int = N_TEST_MONTHS, n_splits: int = N_CV_SPLITS
-) -> tuple[list[Fold], pd.DataFrame]:
+) -> tuple[list[Fold], pd.DataFrame, pd.DataFrame]:
     """Execute the full dataset splitting pipeline for cross-validation and testing.
 
     Isolate a temporal holdout test set using the specified number of recent
@@ -137,8 +137,8 @@ def train_val_test_split(
             splits to generate from historical data. Defaults to `N_CV_SPLITS`.
 
     Returns:
-        tuple[list[Fold], pd.DataFrame]: A tuple containing a list of `Fold`
-            instances for cross-validation and the holdout test DataFrame (`df_test`).
+        tuple[list[Fold], pd.DataFrame, pd.DataFrame]: A tuple containing a list of
+            `Fold` instances for cross-validation and the test DataFrame (`df_test`).
 
     """
     df_remaining, df_test = isolate_test_set(df=df, n_test_months=n_test_months)

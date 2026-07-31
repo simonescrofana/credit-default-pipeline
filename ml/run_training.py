@@ -29,7 +29,7 @@ from ml.models.mlp import (
     build_mlp_model,
 )
 from ml.models.protocol import Estimator
-from ml.models.xgboost import (
+from ml.models.xgboost_model import (
     DEFAULT_EVAL_METRIC,
     DEFAULT_LEARNING_RATE_XGB,
     DEFAULT_MAX_DEPTH,
@@ -129,7 +129,7 @@ MODEL_CONFIGS = [
         threshold=0.0496,
     ),
     ModelConfig(
-        experiment_name="xgboost",
+        experiment_name="xgboost_model",
         model_builder=build_xgboost_model,
         model_params={
             "n_estimators": DEFAULT_N_ESTIMATORS,
@@ -238,5 +238,6 @@ def main(models_to_train: list[str] | None = None) -> None:
 
 if __name__ == "__main__":
     # main(models_to_train=["baseline"]) # to train only baseline model
-    main(models_to_train=["mlp"])  # to train only the MLP model
-    # main() # to train all models
+    # main(models_to_train=["mlp"])  # to train only the MLP model
+    main(models_to_train=["xgboost_model"])  # to train only the XGBoost model
+    # main()  # to train all models

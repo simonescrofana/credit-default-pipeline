@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from xgboost import XGBModel
 
 from ml.models.mlp import MLPClassifier
 from ml.models.protocol import Estimator
@@ -128,7 +129,9 @@ def log_final_run(
     mlflow.log_params(params)
     mlflow.log_metrics(metrics)
 
-    if isinstance(model, BaseEstimator):
+    if isinstance(model, XGBModel):
+        mlflow.xgboost.log_model(xgb_model=model, name="model")
+    elif isinstance(model, BaseEstimator):
         mlflow.sklearn.log_model(model, name="model")
     elif isinstance(model, MLPClassifier):
         # the serialization_format bypass the data example typically required in input
@@ -149,4 +152,7 @@ def log_final_run(
     predictions_df.to_csv("/tmp/final_model_predictions.csv", index=False)
     mlflow.log_artifact("/tmp/final_model_predictions.csv", artifact_path="predictions")
 
-    logger.info("Logged final MLflow run with model, encoder, and scaler artifacts.")
+    logger.info(
+        "Logged final MLflow run with model, encoder, and scaler artifacts "
+        "(when are used)."
+    )

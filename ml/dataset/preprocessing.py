@@ -32,7 +32,7 @@ NUMERIC_COLS_TO_SCALE = [
     "cash_to_debt_ratio",
     "net_profit_margin",
     "ebitda",
-    "avg_dpd_trailing_90d",
+    # "avg_dpd_trailing_90d",
     "unpaid_ratio_trailing_90d",
     "total_outstanding_debt",
     "days_since_last_login",

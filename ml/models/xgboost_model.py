@@ -12,9 +12,10 @@ from xgboost import XGBClassifier
 RANDOM_STATE = 202607
 
 DEFAULT_N_ESTIMATORS = 300
-DEFAULT_MAX_DEPTH = 6
+DEFAULT_MAX_DEPTH = 8
 DEFAULT_LEARNING_RATE_XGB = 0.05
 DEFAULT_EVAL_METRIC = "aucpr"
+DEFAULT_EARLY_STOPPING_ROUNDS = 20
 
 
 def build_xgboost_model(
@@ -23,6 +24,7 @@ def build_xgboost_model(
     learning_rate: float = DEFAULT_LEARNING_RATE_XGB,
     scale_pos_weight: float = 1.0,
     eval_metric: str = DEFAULT_EVAL_METRIC,
+    early_stopping_rounds: int | None = DEFAULT_EARLY_STOPPING_ROUNDS,
 ) -> XGBClassifier:
     """Build a fresh, unfitted XGBClassifier instance.
 
@@ -50,6 +52,12 @@ def build_xgboost_model(
             consistent with the metric used throughout this project's
             evaluation for imbalanced classification. Defaults to
             ``DEFAULT_EVAL_METRIC``.
+        early_stopping_rounds (int | None, optional): The number of consecutive
+            rounds without improvement in `eval_metric` on the validation set
+            before training stops early. Only takes effect when `eval_set` is
+            passed to `.fit()` (done only during cross-validation, never for the
+            final fit on the full training set, to avoid ever using held-out data
+            to influence training). Defaults to `DEFAULT_EARLY_STOPPING_ROUNDS`.
 
     Returns:
         XGBClassifier: A fresh, unfitted model instance.
@@ -61,5 +69,6 @@ def build_xgboost_model(
         learning_rate=learning_rate,
         scale_pos_weight=scale_pos_weight,
         eval_metric=eval_metric,
+        early_stopping_rounds=early_stopping_rounds,
         random_state=RANDOM_STATE,
     )
