@@ -11,7 +11,7 @@ This project is actively developed to simulate an enterprise-grade AI infrastruc
 * **[x] Phase 1:** Infrastructure Setup (Docker, PostgreSQL, GitHub Actions).
 * **[x] Phase 2:** OLTP Core Banking Database Setup & Schema Design (SQLAlchemy ORM + Alembic Migrations).
 * **[x] Phase 3:** MLOps Data Versioning (DVC Data Tracking) & OLAP Warehouse Transformation (dbt Core, Star Schema).
-* **[ ] Phase 4:** Machine Learning Benchmark Suite (Sklearn, XGBoost, PyTorch) & Experiment Tracking (MLflow).
+* **[x] Phase 4:** Machine Learning Benchmark Suite (Sklearn, XGBoost, PyTorch) & Experiment Tracking (MLflow).
 * **[ ] Phase 5:** Explainable AI (SHAP) Integration & Agentic GenAI Layer (LangGraph + ChromaDB).
 * **[ ] Phase 6:** Production Exposure (FastAPI App) & Live Monitoring/Observability UI (Streamlit + Pydantic + Logfire).
 
@@ -23,10 +23,77 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 
 1. **Transactional Layer (OLTP):** Containerized PostgreSQL instance simulating a production core-banking system managed via SQLAlchemy ORM and tracked through Alembic migrations.
 2. **Analytical Layer (OLAP):** Dimensional Data Warehouse modeled into a Star Schema driven by dbt Core over historical immutable ledgers.
-3. **MLOps & Lifecyle Layer:** Data version control implemented with DVC. Dual-engine training pipeline (Gradient Boosted Trees & PyTorch Neural Architectures) integrated with MLflow for artifact logging, hyperparameter tracking, and model registry.
+3. **MLOps & Lifecyle Layer:** Data version control implemented with DVC. Multi-model training pipeline (a cost-sensitive baseline, Gradient Boosted Trees, and a PyTorch Neural Network) integrated with MLflow for artifact logging, hyperparameter tracking, and model registry.
 4. **Explainable AI (xAI) Module:** Interpretability extraction utilizing SHAP to ensure credit scoring compliance and transparency.
 5. **Generative AI Layer:** An agent system built via LangGraph acting as an autonomous financial analyst, querying a ChromaDB vector store, running local inference, and validated by an LLM-as-a-Judge node.
+6. **Application & Serving Layer:** A FastAPI backend exposing validated REST endpoints for predictions and chat interactions, paired with a Streamlit interface acting as a live, interactive demo of the full pipeline.
 
+---
+ 
+## 🧠 Architectural Decisions & Rationale
+ 
+#### Complete Isolation of OLTP and OLAP Store
+* **Choice:** Running an analytical dbt layer over isolated analytical tables instead of running feature engineering queries straight against live application tables.
+* **Justification:** Aggregation queries on production ledgers introduce lock contention and severely degrade user experience. Isolating data access ensures transactional low-latency uptime while enabling heavy-duty relational processing inside an optimized data warehouse.
+
+#### Feature Engineering Delegated to the Analytical Layer
+* **Choice:** Performing the heavy feature engineering (trailing-window aggregations, as-of temporal joins, SCD2 resolution) inside dbt/SQL, keeping the Python ML layer focused on feature *preparation* (encoding, imputation, scaling) rather than feature *engineering*.
+* **Justification:** Keeping a single source of truth for business logic in SQL/dbt — already covered by dedicated data-quality and leakage tests — avoids duplicating transformation logic across languages and reduces the risk of training/serving skew.
+
+#### Temporal Integrity as a First-Class Constraint
+* **Choice:** Treating the feature mart as panel data (one row per company per snapshot date) and designing every split, validation, and dimension-resolution strategy around a point-in-time cutoff instead of random shuffling.
+* **Justification:** Credit risk data is inherently sequential. A random split would leak future information into training and produce metrics that look strong but collapse in production; SCD Type 2 dimensions and as-of joins ensure that every feature reflects only information that was actually available at the snapshot date.
+
+#### Trailing DPD Window Fix (Data Quality)
+* **Choice:** Widened the 90-day trailing window used by `int_billing_trailing_90d` to select candidate invoices to 120 days, without changing the underlying days-past-due calculation.
+* **Justification:** While validating the ML feature set end-to-end, the original 90-day window was found to systematically exclude unpaid invoices right before their days-past-due value could reach the 90-day insolvency threshold, silently producing zero labeled insolvencies across the entire mart. 120 days is the minimum window that reliably captures the threshold under monthly snapshots.
+
+#### Near-Leakage Feature Removal (Data Quality)
+* **Choice:** Removed `avg_dpd_trailing_90d` from the training feature set entirely, after it was found responsible for most of a suspiciously high test-set AUC-PR.
+* **Justification:** An AUC-PR of 0.988 (XGBoost) prompted a targeted investigation rather than acceptance at face value. Removing the feature alone dropped AUC-PR to 0.691 (XGBoost), 0.633 (baseline), and 0.499 (MLP) — a consistent drop across all three model families — confirming it was strongly correlated (Pearson 0.80) with the deterministic label-generating column `max_dpd_trailing_90d` and was dominating the shared predictive signal rather than the models learning it independently.
+
+#### Informative Missing Values over Blind Imputation or Row Dropping
+* **Choice:** Nullable feature groups (financial statement ratios, login activity, support ticket satisfaction) are handled with a per-group binary flag marking whether the value was observed, followed by a group-specific fallback constant, rather than dropping incomplete rows or imputing with a statistical average.
+* **Justification:** A diagnostic query showed that a naive `dropna` would have discarded roughly 77% of the dataset, disproportionately removing companies with no recent support tickets — a systematic selection bias, not a random one. The missingness itself is informative (e.g. no resolved tickets recently, no published financial statement yet), so it is preserved as a signal instead of being discarded or disguised as an invented average.
+
+#### Size-Weighted Cross-Validation Metric Aggregation
+* **Choice:** Aggregating per-fold validation metrics with a mean weighted by each fold's validation set size, while confusion matrix counts (true/false positives/negatives) are summed rather than averaged.
+* **Justification:** `TimeSeriesSplit`'s expanding window produces folds of unequal size, so an unweighted mean would give a small, less reliable early fold the same influence as a large, more reliable later one. Confusion matrix counts are absolute quantities tied to fold size; averaging them (weighted or not) yields a number with no clear interpretation, while summing preserves their meaning as a total across the full cross-validation run, since each row is scored exactly once.
+
+#### Structural Typing over a Shared Model Base Class
+* **Choice:** Defining an `Estimator` structural protocol (`fit`/`predict_proba`) that scikit-learn estimators and a custom PyTorch wrapper both satisfy implicitly, rather than forcing a shared base class or inheritance hierarchy across model families.
+* **Justification:** scikit-learn and PyTorch models have fundamentally different internals (a declarative `.fit()` call versus a manual training loop); requiring a common base class would either constrain scikit-learn's own class hierarchy or force an artificial wrapper on it. Structural typing lets the training orchestrator depend only on the shape of the interface, keeping both model families and the orchestrator itself decoupled from one another.
+
+#### F2-Optimal Decision Threshold per Model Family
+* **Choice:** Instead of using the default 0.5 probability cutoff to convert predicted probabilities into a binary class, each model family's decision threshold is separately tuned by maximizing the F2-score on the aggregated cross-validation folds (computed in `evaluation/plots.ipynb`), then wired into the final training run.
+* **Justification:** Under substantial class imbalance (~16% positive rate), 0.5 is an arbitrary cutoff with no particular statistical justification, and each model family produces probabilities on a different scale. F2 weighs recall more heavily than precision, appropriate for insolvency prediction where missing an actual default is costlier than a false alarm; tuning it per model family, rather than sharing one global threshold, respects each family's own calibration instead of forcing a shared assumption onto all three.
+
+#### Manual Hyperparameter Tuning via Shell Scripts
+* **Choice:** Hyperparameter search is performed as a manual grid search driven by dedicated shell scripts under `ml/tuning/scripts/`, one per model family (plus a narrower `fine_tune_xgb.sh` second pass for XGBoost, once the full grid pointed to a promising region). Each script temporarily patches the relevant defaults via `sed`, runs the training pipeline for that combination, and appends the resulting cross-validation metrics to a CSV under `ml/tuning/results/`, keeping full per-run logs under `ml/tuning/logs/`. The original files are always restored on exit (success, failure, or interruption).
+* **Justification:** With only 2-3 hyperparameters explored per model family, a manual grid search keeps the process reproducible and inspectable without adding a new dependency or learning curve. A shared quirk had to be worked around: `setup_logging()` registers both a plain `StreamHandler` and Logfire's handler, and Logfire also echoes the same line to stdout independently, so each log line is captured twice, the parsing step takes only the first occurrence to avoid corrupting the results CSV.
+
+#### SHAP-Driven Input Validation for Ad Hoc Predictions
+* **Choice:** XGBoost is the only model family explained via SHAP (`ml/evaluation/explainability.py`, built on `TreeExplainer`), since only the best-performing model is ever deployed, and prior benchmarking already pointed to XGBoost, investing explainability effort in the baseline or MLP would not translate into production value. That same SHAP analysis (see the beeswarm plot in `ml/evaluation/plots.ipynb`) directly drives which fields are required versus optional in the `InsolvencyPredictionRequest` Pydantic schema used to validate ad hoc predictions for companies not yet in the database: the two dominant features (`unpaid_ratio_trailing_90d`, `total_outstanding_debt`) are mandatory, while the rest are optional and left as NaN when omitted.
+* **Justification:** This ties the validation layer's strictness to actual, measured feature importance rather than an arbitrary judgment call about which fields "feel" necessary, and lets XGBoost's native missing-value handling (the model is trained with `handle_nan=False`) degrade gracefully on the fields it relies on least.
+
+#### Modern Python Tooling (`uv` + Ruff)
+* **Choice:** Moving away from standard `pip`/`venv` and selecting `uv` as the exclusive dependency manager alongside Ruff for quality gating.
+* **Justification:** `uv` provides blazing-fast environment synchronization and strict, deterministic lockfile management, eliminating the "it works on my machine" anti-pattern in production containers. Ruff guarantees lightning-fast code linting and formatting compliance natively during pre-commit and CI stages.
+
+---
+
+## 📊 Results
+ 
+Final holdout test set metrics (never seen during training, cross-validation, or hyperparameter tuning), evaluated at each model family's own F2-optimal decision threshold:
+ 
+| Model | AUC-ROC | AUC-PR | Precision | Recall | F1 |
+|---|---|---|---|---|---|
+| Baseline (Logistic Regression) | 0.8742 | 0.5026 | 0.3911 | 0.9578 | 0.5555 |
+| MLP (PyTorch) | 0.8890 | 0.6030 | 0.3838 | 1.0000 | 0.5547 |
+| **XGBoost** | **0.9198** | **0.6951** | **0.4351** | **0.9794** | **0.6026** |
+ 
+XGBoost is the strongest model on every metric except recall, where the MLP reaches a perfect 1.0. This is not attributable to a well-chosen decision threshold, the same result holds regardless of the threshold used, suggesting the MLP's predicted probabilities are clustered in a narrow, mostly-high range rather than genuinely separating the two classes. Combined with its lower AUC-ROC and AUC-PR, this points to weaker discrimination overall rather than superior performance. XGBoost is the model served in production, consistent with it being the only model family benchmarked and explained in depth (see the SHAP section below and `ml/evaluation/plots.ipynb`).
+ 
 ---
 
 ## 🛠️ Tech Stack
@@ -95,45 +162,45 @@ insolvency_prediction_project/
 │   │   │   ├── companies_snapshot.sql
 │   │   │   └── energy_contracts_snapshot.sql
 │   │   ├── tests/
-│   │   │   ├── marts/
-│   │   │   │   ├── dim_companies/
-│   │   │   │   │   ├── dim_companies_no_overlapping_windows.sql
-│   │   │   │   │   └── dim_companies_single_current_version.sql
-│   │   │   │   ├── dim_date/
-│   │   │   │   │   └── dim_date_no_gaps.sql
-│   │   │   │   └── fct_company_credit_profile/
-│   │   │   │       ├── fct_company_key_temporal_correctness.sql
-│   │   │   │       ├── fct_no_dropped_spine_rows.sql
-│   │   │   │       └── fct_no_unexpected_nulls.sql
-│   │   │   └── intermediate/
-│   │   │       ├── int_billing_trailing_90d/
-│   │   │       │   ├── int_billing_trailing_90d_debt_ratio_match.sql
-│   │   │       │   ├── int_billing_trailing_90d_dpd_consistency.sql
-│   │   │       │   └── int_billing_trailing_90d_no_future_leakage.sql
-│   │   │       ├── int_companies_scd_resolved/
-│   │   │       │   ├── int_companies_scd_resolved_chronology.sql
-│   │   │       │   ├── int_companies_scd_resolved_expired_versions.sql
-│   │   │       │   └── int_companies_scd_resolved_leakage.sql
-│   │   │       ├── int_company_date_spine/
-│   │   │       │   ├── int_company_date_spine_no_dates_before_foundation.sql
-│   │   │       │   ├── int_company_date_spine_no_future_dates.sql
-│   │   │       │   ├── int_company_date_spine_np_gaps.sql
-│   │   │       │   └── int_company_date_spine_respects_valid_to.sql
-│   │   │       ├── int_contracts_asof/
-│   │   │       │   ├── int_contracts_asof_count_flag_consistency.sql
-│   │   │       │   └── int_contracts_asof_no_future_leakage.sql
-│   │   │       ├── int_financial_asof/
-│   │   │       │   ├── int_financial_asof_publication_delay_leakage.sql
-│   │   │       │   └── int_financial_asof_rank_recency.sql
-│   │   │       ├── int_insolvency_label/
-│   │   │       │   ├── int_insolvency_label_false_negative.sql
-│   │   │       │   └── int_insolvency_label_false_positive.sql
-│   │   │       ├── int_logins_trailing/
-│   │   │       │   ├── int_logins_trailing_null_consistency.sql
-│   │   │       │   ├── int_logins_trailing_recency_boundary.sql
-│   │   │       │   └── int_logins_trailing_velocity_coherence.sql
-│   │   │       └── int_tickets_trailing_90d/
-│   │   │           └── int_tickets_trailing_90d_no_future_leakage.sql
+│   │   │   ├── intermediate/
+│   │   │   │   ├── int_billing_trailing_90d/
+│   │   │   │   │   ├── int_billing_trailing_90d_debt_ratio_match.sql
+│   │   │   │   │   ├── int_billing_trailing_90d_dpd_consistency.sql
+│   │   │   │   │   └── int_billing_trailing_90d_no_future_leakage.sql
+│   │   │   │   ├── int_companies_scd_resolved/
+│   │   │   │   │   ├── int_companies_scd_resolved_chronology.sql
+│   │   │   │   │   ├── int_companies_scd_resolved_expired_versions.sql
+│   │   │   │   │   └── int_companies_scd_resolved_leakage.sql
+│   │   │   │   ├── int_company_date_spine/
+│   │   │   │   │   ├── int_company_date_spine_no_dates_before_foundation.sql
+│   │   │   │   │   ├── int_company_date_spine_no_future_dates.sql
+│   │   │   │   │   ├── int_company_date_spine_np_gaps.sql
+│   │   │   │   │   └── int_company_date_spine_respects_valid_to.sql
+│   │   │   │   ├── int_contracts_asof/
+│   │   │   │   │   ├── int_contracts_asof_count_flag_consistency.sql
+│   │   │   │   │   └── int_contracts_asof_no_future_leakage.sql
+│   │   │   │   ├── int_financial_asof/
+│   │   │   │   │   ├── int_financial_asof_publication_delay_leakage.sql
+│   │   │   │   │   └── int_financial_asof_rank_recency.sql
+│   │   │   │   ├── int_insolvency_label/
+│   │   │   │   │   ├── int_insolvency_label_false_negative.sql
+│   │   │   │   │   └── int_insolvency_label_false_positive.sql
+│   │   │   │   ├── int_logins_trailing/
+│   │   │   │   │   ├── int_logins_trailing_null_consistency.sql
+│   │   │   │   │   ├── int_logins_trailing_recency_boundary.sql
+│   │   │   │   │   └── int_logins_trailing_velocity_coherence.sql
+│   │   │   │   └── int_tickets_trailing_90d/
+│   │   │   │       └── int_tickets_trailing_90d_no_future_leakage.sql
+│   │   │   └── marts/
+│   │   │       ├── dim_companies/
+│   │   │       │   ├── dim_companies_no_overlapping_windows.sql
+│   │   │       │   └── dim_companies_single_current_version.sql
+│   │   │       ├── dim_date/
+│   │   │       │   └── dim_date_no_gaps.sql
+│   │   │       └── fct_company_credit_profile/
+│   │   │           ├── fct_company_key_temporal_correctness.sql
+│   │   │           ├── fct_no_dropped_spine_rows.sql
+│   │   │           └── fct_no_unexpected_nulls.sql
 │   │   ├── .envrc
 │   │   ├── .envrc.example
 │   │   ├── .gitignore
@@ -174,10 +241,48 @@ insolvency_prediction_project/
 │       ├── credit-default-DFM.sql
 │       ├── credit-default-star-schema.sql
 │       └── database_structure.sql
-├── pipeline/
+├── ml/
+│   ├── dataset/
+│   │   ├── __init__.py
+│   │   ├── loader.py
+│   │   ├── preprocessing.py
+│   │   └── split.py
+│   ├── evaluation/
+│   │   ├── __init__.py
+│   │   ├── explainability.py
+│   │   ├── metrics.py
+│   │   └── plots.ipynb
+│   ├── inference/
+│   │   ├── __init__.py
+│   │   ├── model_loader.py
+│   │   └── predictor.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── baseline.py
+│   │   ├── mlp.py
+│   │   ├── protocol.py
+│   │   └── xgboost_model.py
+│   ├── training/
+│   │   ├── __init__.py
+│   │   ├── mlflow_utils.py
+│   │   └── trainer.py
+│   ├── tuning/
+│   │   ├── results/
+│   │   │   ├── baseline_results.csv
+│   │   │   ├── mlp_results.csv
+│   │   │   ├── xgboost_fine_results.csv
+│   │   │   └── xgboost_results.csv
+│   │   └── scripts
+│   │       ├── fine_tune_xgb.sh
+│   │       ├── tune_baseline.sh
+│   │       ├── tune_mlp.sh
+│   │       └── tune_xgb.sh
+│   ├── __init__.py
+│   └── run_training.py
 ├── schemas/
 │   ├── __init__.py
 │   ├── base.py
+│   ├── insolvency_prediction.py
 │   ├── models_validation.py
 │   └── types.py
 ├── simulation/
@@ -195,20 +300,46 @@ insolvency_prediction_project/
 │   │   ├── __init__.py
 │   │   ├── test_connection.py
 │   │   └── test_models.py
+│   ├── ml/
+│   │   ├── dataset/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_loader.py
+│   │   │   ├── test_preprocessing.py
+│   │   │   └── test_split.py
+│   │   ├── evaluation/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_explainability.py
+│   │   │   └── test_metrics.py
+│   │   ├── inference/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_model_loader.py
+│   │   │   └── test_predictor.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_baseline.py
+│   │   │   └── test_mlp.py
+│   │   ├── training/
+│   │   │   ├── __init__.py
+│   │   │   └── test_trainer.py
+│   │   ├── __init__.py
+│   │   └── test_run_training.py
 │   ├── schemas/
 │   │   ├── __init__.py
+│   │   ├── test_insolvency_prediction.py
 │   │   └── test_models_validation.py
 │   ├── simulation/
 │   │   ├── __init__.py
 │   │   └── test_seed.py
 │   ├── utils/
 │   │   ├── __init__.py
+│   │   ├── test_date_validation.py
 │   │   └── test_timezone_utils.py
 │   ├── __init__.py
 │   └── conftest.py
 ├── ui/
 ├── utils/
 │   ├── __init__.py
+│   ├── date_validation.py
 │   ├── logging_utils.py
 │   └── timezone_utils.py
 ├── .dvcignore

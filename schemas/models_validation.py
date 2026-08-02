@@ -69,6 +69,7 @@ from schemas.types import (
     VatNumber,
     VoltageLevel,
 )
+from utils.date_validation import validate_not_future_date
 from utils.timezone_utils import ensure_utc_aware
 
 
@@ -115,10 +116,7 @@ class CompanyCreate(BaseResponseSchema):
             ValueError: If the foundation date is set to a future date.
 
         """
-        today = datetime.datetime.now(tz=datetime.timezone.utc).date()
-        if self.foundation_date > today:
-            raise ValueError("Foundation date can not be in the future.")
-
+        validate_not_future_date(self.foundation_date, "Foundation date")
         return self
 
 

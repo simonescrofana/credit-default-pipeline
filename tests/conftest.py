@@ -9,7 +9,6 @@ Supported tools and integrations:
 
 """
 
-import logging
 import os
 from collections.abc import Iterator
 
@@ -22,18 +21,9 @@ from sqlalchemy.pool import NullPool
 from config import settings
 from database.base import Base
 from database.connection import engine
+from utils.logging_utils import setup_logging
 
-LOG_FORMAT = "%(asctime)s - %(levelname)s - [%(name)s] - %(message)s"
-DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-logfire.configure(token=settings.LOGFIRE_TOKEN.get_secret_value())
-logging.basicConfig(
-    level=logging.DEBUG,
-    format=LOG_FORMAT,
-    datefmt=DATE_FORMAT,
-    handlers=[logging.StreamHandler(), logfire.LogfireLoggingHandler()],
-)
-
+setup_logging("DEBUG")
 logfire.instrument_sqlalchemy(engine=engine)
 
 

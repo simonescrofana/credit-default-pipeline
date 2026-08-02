@@ -9,6 +9,7 @@ on:
 jobs:
   quality-assurance:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     services:
       postgres:
