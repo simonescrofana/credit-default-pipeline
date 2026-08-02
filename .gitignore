@@ -226,3 +226,7 @@ __marimo__/
 mlflow.db
 mlruns/
 mlartifacts/
+
+# Tuning models
+ml/tuning/logs/*
+*.bak

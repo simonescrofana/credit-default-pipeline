@@ -13,7 +13,7 @@ dependencies = [
     "logfire[sqlalchemy]>=4.37.0",
     "matplotlib>=3.11.1",
     "mlflow-skinny>=3.14.0",
-    "numpy>=2.5.1",
+    "numpy<2.5",
     "pandas>=3.0.3",
     "psycopg2-binary>=2.9.12",
     "pyarrow>=25.0.0",
@@ -22,6 +22,7 @@ dependencies = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "scikit-learn>=1.9.0",
+    "shap>=0.52.0",
     "skops>=0.14.0",
     "sqlalchemy>=2.0.51",
     "torch>=2.13.0",
@@ -52,6 +53,7 @@ docstring-code-line-length = 72
 pythonpath = ["."]
 filterwarnings = [
     "ignore::pytest.PytestUnraisableExceptionWarning",
+    "ignore::PendingDeprecationWarning:shap.*",
 ]
 
 [tool.coverage.run]

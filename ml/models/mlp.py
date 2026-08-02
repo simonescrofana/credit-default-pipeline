@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 RANDOM_STATE = 202607
 
 DEFAULT_HIDDEN_LAYERS = (64, 32, 16, 8)
-DEFAULT_DROPOUT = 0.3
+DEFAULT_DROPOUT = 0.5
 DEFAULT_EPOCHS = 25
 DEFAULT_BATCH_SIZE = 1024
-DEFAULT_LEARNING_RATE_MLP = 1e-4
-DEFAULT_WEIGHT_DECAY = 1e-3
+DEFAULT_LEARNING_RATE_MLP = 1e-3
+DEFAULT_WEIGHT_DECAY = 1e-4
 
 
 class _MLPNetwork(nn.Module):
@@ -220,7 +220,7 @@ class MLPClassifier:
                 if val_loss is not None:
                     mlflow.log_metric("val_loss", val_loss, step=epoch)
 
-            if epoch % 10 == 0 or epoch == self.epochs:
+            if epoch % 5 == 0 or epoch == self.epochs:
                 if val_loss is not None:
                     logger.info(
                         "Epoch %d/%d: train_loss=%.4f, val_loss=%.4f",

@@ -5,6 +5,7 @@ fitting for each selected model family.
 
 """
 
+import gc
 import logging
 from collections.abc import Callable
 from typing import NamedTuple
@@ -109,7 +110,7 @@ MODEL_CONFIGS = [
         scale=True,
         handle_nan=True,
         # optimal threshold, see plots.ipynb (F2-optimal on aggregated CV folds)
-        threshold=0.5047,
+        threshold=0.4078,
     ),
     ModelConfig(
         experiment_name="mlp",
@@ -126,7 +127,7 @@ MODEL_CONFIGS = [
         scale=True,
         handle_nan=True,
         # optimal threshold, see plots.ipynb (F2-optimal on aggregated CV folds)
-        threshold=0.0496,
+        threshold=0.5,  # 0.0012: ignored: suspiciously low, and not affecting results
     ),
     ModelConfig(
         experiment_name="xgboost_model",
@@ -140,7 +141,8 @@ MODEL_CONFIGS = [
         },
         scale=False,
         handle_nan=False,
-        threshold=0.5,
+        # optimal threshold, see plots.ipynb (F2-optimal on aggregated CV folds)
+        threshold=0.4580,
     ),
 ]
 
@@ -235,9 +237,12 @@ def main(models_to_train: list[str] | None = None) -> None:
             threshold=config.threshold,
         )
 
+        del train_folds, final_split
+        gc.collect()
+
 
 if __name__ == "__main__":
     # main(models_to_train=["baseline"]) # to train only baseline model
     # main(models_to_train=["mlp"])  # to train only the MLP model
-    main(models_to_train=["xgboost_model"])  # to train only the XGBoost model
-    # main()  # to train all models
+    # main(models_to_train=["xgboost_model"])  # to train only the XGBoost model
+    main()  # to train all models

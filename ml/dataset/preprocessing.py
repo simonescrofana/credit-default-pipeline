@@ -69,7 +69,7 @@ def handle_missing_and_encode(
 
     Returns:
         tuple[pd.DataFrame, OneHotEncoder]: The transformed DataFrame and the
-        (possibly newly fitted) encoder.
+            (possibly newly fitted) encoder.
 
     """
     logger.info("Handling missing values and encoding categorical columns...")

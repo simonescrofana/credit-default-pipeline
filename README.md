@@ -11,7 +11,7 @@ This project is actively developed to simulate an enterprise-grade AI infrastruc
 * **[x] Phase 1:** Infrastructure Setup (Docker, PostgreSQL, GitHub Actions).
 * **[x] Phase 2:** OLTP Core Banking Database Setup & Schema Design (SQLAlchemy ORM + Alembic Migrations).
 * **[x] Phase 3:** MLOps Data Versioning (DVC Data Tracking) & OLAP Warehouse Transformation (dbt Core, Star Schema).
-* **[ ] Phase 4:** Machine Learning Benchmark Suite (Sklearn, XGBoost, PyTorch) & Experiment Tracking (MLflow).
+* **[x] Phase 4:** Machine Learning Benchmark Suite (Sklearn, XGBoost, PyTorch) & Experiment Tracking (MLflow).
 * **[ ] Phase 5:** Explainable AI (SHAP) Integration & Agentic GenAI Layer (LangGraph + ChromaDB).
 * **[ ] Phase 6:** Production Exposure (FastAPI App) & Live Monitoring/Observability UI (Streamlit + Pydantic + Logfire).
 
@@ -48,6 +48,10 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 * **Choice:** Widened the 90-day trailing window used by `int_billing_trailing_90d` to select candidate invoices to 120 days, without changing the underlying days-past-due calculation.
 * **Justification:** While validating the ML feature set end-to-end, the original 90-day window was found to systematically exclude unpaid invoices right before their days-past-due value could reach the 90-day insolvency threshold, silently producing zero labeled insolvencies across the entire mart. 120 days is the minimum window that reliably captures the threshold under monthly snapshots.
 
+#### Near-Leakage Feature Removal (Data Quality)
+* **Choice:** Removed `avg_dpd_trailing_90d` from the training feature set entirely, after it was found responsible for most of a suspiciously high test-set AUC-PR.
+* **Justification:** An AUC-PR of 0.988 (XGBoost) prompted a targeted investigation rather than acceptance at face value. Removing the feature alone dropped AUC-PR to 0.691 (XGBoost), 0.633 (baseline), and 0.499 (MLP) — a consistent drop across all three model families — confirming it was strongly correlated (Pearson 0.80) with the deterministic label-generating column `max_dpd_trailing_90d` and was dominating the shared predictive signal rather than the models learning it independently.
+
 #### Informative Missing Values over Blind Imputation or Row Dropping
 * **Choice:** Nullable feature groups (financial statement ratios, login activity, support ticket satisfaction) are handled with a per-group binary flag marking whether the value was observed, followed by a group-specific fallback constant, rather than dropping incomplete rows or imputing with a statistical average.
 * **Justification:** A diagnostic query showed that a naive `dropna` would have discarded roughly 77% of the dataset, disproportionately removing companies with no recent support tickets — a systematic selection bias, not a random one. The missingness itself is informative (e.g. no resolved tickets recently, no published financial statement yet), so it is preserved as a signal instead of being discarded or disguised as an invented average.
@@ -60,10 +64,36 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 * **Choice:** Defining an `Estimator` structural protocol (`fit`/`predict_proba`) that scikit-learn estimators and a custom PyTorch wrapper both satisfy implicitly, rather than forcing a shared base class or inheritance hierarchy across model families.
 * **Justification:** scikit-learn and PyTorch models have fundamentally different internals (a declarative `.fit()` call versus a manual training loop); requiring a common base class would either constrain scikit-learn's own class hierarchy or force an artificial wrapper on it. Structural typing lets the training orchestrator depend only on the shape of the interface, keeping both model families and the orchestrator itself decoupled from one another.
 
+#### F2-Optimal Decision Threshold per Model Family
+* **Choice:** Instead of using the default 0.5 probability cutoff to convert predicted probabilities into a binary class, each model family's decision threshold is separately tuned by maximizing the F2-score on the aggregated cross-validation folds (computed in `evaluation/plots.ipynb`), then wired into the final training run.
+* **Justification:** Under substantial class imbalance (~16% positive rate), 0.5 is an arbitrary cutoff with no particular statistical justification, and each model family produces probabilities on a different scale. F2 weighs recall more heavily than precision, appropriate for insolvency prediction where missing an actual default is costlier than a false alarm; tuning it per model family, rather than sharing one global threshold, respects each family's own calibration instead of forcing a shared assumption onto all three.
+
+#### Manual Hyperparameter Tuning via Shell Scripts
+* **Choice:** Hyperparameter search is performed as a manual grid search driven by dedicated shell scripts under `ml/tuning/scripts/`, one per model family (plus a narrower `fine_tune_xgb.sh` second pass for XGBoost, once the full grid pointed to a promising region). Each script temporarily patches the relevant defaults via `sed`, runs the training pipeline for that combination, and appends the resulting cross-validation metrics to a CSV under `ml/tuning/results/`, keeping full per-run logs under `ml/tuning/logs/`. The original files are always restored on exit (success, failure, or interruption).
+* **Justification:** With only 2-3 hyperparameters explored per model family, a manual grid search keeps the process reproducible and inspectable without adding a new dependency or learning curve. A shared quirk had to be worked around: `setup_logging()` registers both a plain `StreamHandler` and Logfire's handler, and Logfire also echoes the same line to stdout independently, so each log line is captured twice, the parsing step takes only the first occurrence to avoid corrupting the results CSV.
+
+#### SHAP-Driven Input Validation for Ad Hoc Predictions
+* **Choice:** XGBoost is the only model family explained via SHAP (`ml/evaluation/explainability.py`, built on `TreeExplainer`), since only the best-performing model is ever deployed, and prior benchmarking already pointed to XGBoost, investing explainability effort in the baseline or MLP would not translate into production value. That same SHAP analysis (see the beeswarm plot in `ml/evaluation/plots.ipynb`) directly drives which fields are required versus optional in the `InsolvencyPredictionRequest` Pydantic schema used to validate ad hoc predictions for companies not yet in the database: the two dominant features (`unpaid_ratio_trailing_90d`, `total_outstanding_debt`) are mandatory, while the rest are optional and left as NaN when omitted.
+* **Justification:** This ties the validation layer's strictness to actual, measured feature importance rather than an arbitrary judgment call about which fields "feel" necessary, and lets XGBoost's native missing-value handling (the model is trained with `handle_nan=False`) degrade gracefully on the fields it relies on least.
+
 #### Modern Python Tooling (`uv` + Ruff)
 * **Choice:** Moving away from standard `pip`/`venv` and selecting `uv` as the exclusive dependency manager alongside Ruff for quality gating.
 * **Justification:** `uv` provides blazing-fast environment synchronization and strict, deterministic lockfile management, eliminating the "it works on my machine" anti-pattern in production containers. Ruff guarantees lightning-fast code linting and formatting compliance natively during pre-commit and CI stages.
 
+---
+
+## 📊 Results
+ 
+Final holdout test set metrics (never seen during training, cross-validation, or hyperparameter tuning), evaluated at each model family's own F2-optimal decision threshold:
+ 
+| Model | AUC-ROC | AUC-PR | Precision | Recall | F1 |
+|---|---|---|---|---|---|
+| Baseline (Logistic Regression) | 0.8742 | 0.5026 | 0.3911 | 0.9578 | 0.5555 |
+| MLP (PyTorch) | 0.8890 | 0.6030 | 0.3838 | 1.0000 | 0.5547 |
+| **XGBoost** | **0.9198** | **0.6951** | **0.4351** | **0.9794** | **0.6026** |
+ 
+XGBoost is the strongest model on every metric except recall, where the MLP reaches a perfect 1.0. This is not attributable to a well-chosen decision threshold, the same result holds regardless of the threshold used, suggesting the MLP's predicted probabilities are clustered in a narrow, mostly-high range rather than genuinely separating the two classes. Combined with its lower AUC-ROC and AUC-PR, this points to weaker discrimination overall rather than superior performance. XGBoost is the model served in production, consistent with it being the only model family benchmarked and explained in depth (see the SHAP section below and `ml/evaluation/plots.ipynb`).
+ 
 ---
 
 ## 🛠️ Tech Stack
@@ -219,6 +249,7 @@ insolvency_prediction_project/
 │   │   └── split.py
 │   ├── evaluation/
 │   │   ├── __init__.py
+│   │   ├── explainability.py
 │   │   ├── metrics.py
 │   │   └── plots.ipynb
 │   ├── inference/
@@ -229,16 +260,29 @@ insolvency_prediction_project/
 │   │   ├── __init__.py
 │   │   ├── baseline.py
 │   │   ├── mlp.py
-│   │   └── protocol.py
+│   │   ├── protocol.py
+│   │   └── xgboost_model.py
 │   ├── training/
 │   │   ├── __init__.py
 │   │   ├── mlflow_utils.py
 │   │   └── trainer.py
+│   ├── tuning/
+│   │   ├── results/
+│   │   │   ├── baseline_results.csv
+│   │   │   ├── mlp_results.csv
+│   │   │   ├── xgboost_fine_results.csv
+│   │   │   └── xgboost_results.csv
+│   │   └── scripts
+│   │       ├── fine_tune_xgb.sh
+│   │       ├── tune_baseline.sh
+│   │       ├── tune_mlp.sh
+│   │       └── tune_xgb.sh
 │   ├── __init__.py
 │   └── run_training.py
 ├── schemas/
 │   ├── __init__.py
 │   ├── base.py
+│   ├── insolvency_prediction.py
 │   ├── models_validation.py
 │   └── types.py
 ├── simulation/
@@ -264,6 +308,7 @@ insolvency_prediction_project/
 │   │   │   └── test_split.py
 │   │   ├── evaluation/
 │   │   │   ├── __init__.py
+│   │   │   ├── test_explainability.py
 │   │   │   └── test_metrics.py
 │   │   ├── inference/
 │   │   │   ├── __init__.py
@@ -280,18 +325,21 @@ insolvency_prediction_project/
 │   │   └── test_run_training.py
 │   ├── schemas/
 │   │   ├── __init__.py
+│   │   ├── test_insolvency_prediction.py
 │   │   └── test_models_validation.py
 │   ├── simulation/
 │   │   ├── __init__.py
 │   │   └── test_seed.py
 │   ├── utils/
 │   │   ├── __init__.py
+│   │   ├── test_date_validation.py
 │   │   └── test_timezone_utils.py
 │   ├── __init__.py
 │   └── conftest.py
 ├── ui/
 ├── utils/
 │   ├── __init__.py
+│   ├── date_validation.py
 │   ├── logging_utils.py
 │   └── timezone_utils.py
 ├── .dvcignore

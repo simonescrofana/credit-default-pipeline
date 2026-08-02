@@ -10,7 +10,7 @@ from sklearn.linear_model import LogisticRegression
 
 RANDOM_STATE = 202607
 
-DEFAULT_C = 1.0
+DEFAULT_C = 0.01
 DEFAULT_MAX_ITER = 1000
 
 
