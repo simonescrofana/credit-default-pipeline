@@ -20,7 +20,7 @@ from ml.dataset.loader import QUERY
 from ml.dataset.preprocessing import handle_missing_and_encode, scale_features
 from ml.evaluation.explainability import explain_prediction
 from ml.inference.model_loader import LoadedModel
-from schemas.insolvency_prediction import InsolvencyPredictionRequest
+from schemas.ml.insolvency_prediction import InsolvencyPredictionRequest
 
 logger = logging.getLogger(__name__)
 

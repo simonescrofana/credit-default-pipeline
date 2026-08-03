@@ -20,8 +20,8 @@ from typing import Literal, Optional, Self
 
 from pydantic import Field, computed_field, model_validator
 
-from schemas.base import BaseResponseSchema
-from schemas.types import FoundationDate, IndustrySectorType
+from schemas.database.base import BaseResponseSchema
+from schemas.database.types import FoundationDate, IndustrySectorType
 from utils.date_validation import validate_not_future_date
 
 RegisteredOfficeRegion = Literal[

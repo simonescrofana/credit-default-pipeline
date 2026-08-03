@@ -25,7 +25,7 @@ import datetime
 import pytest
 from pydantic import ValidationError
 
-from schemas.models_validation import (
+from schemas.database.models_validation import (
     CompanyCreate,
     CRMSupportTicketCreate,
     EnergyContractCreate,

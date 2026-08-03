@@ -23,7 +23,7 @@ from ml.inference.predictor import (
     retrieve_company_data,
     score_features,
 )
-from schemas.insolvency_prediction import InsolvencyPredictionRequest
+from schemas.ml.insolvency_prediction import InsolvencyPredictionRequest
 
 
 @patch("ml.inference.predictor.pd.read_sql")

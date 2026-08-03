@@ -11,6 +11,8 @@ relevant to the request.
 
 from typing import Any, Literal, Optional
 
+from schemas.agent.types import AgentRoute
+
 from pydantic import BaseModel, Field
 
 
@@ -21,10 +23,8 @@ class AgentState(BaseModel):
         user_input (str): The raw, most recent message from the user.
         messages (list[dict]): The running conversation history, as
             role/content dicts.
-        route (str | None): The path chosen by the router node, one of
-            "case_a" (prediction on an existing company), "case_b"
-            (prediction on user-supplied data), "rag" (documentation
-            retrieval), or "direct" (no external grounding needed).
+        route (AgentRoute | None): The path chosen by the router node. See
+            `schemas.agent.types.AgentRoute` for the set of possible values.
         company_identifiers (list[str] | None): Company identifiers (e.g.
             VAT number or legal name) extracted from the prompt for case_a.
             Supports multiple companies in a single request.
@@ -55,7 +55,7 @@ class AgentState(BaseModel):
     messages: list[dict[str, str]] = Field(default_factory=list)
 
     # Router output
-    route: Optional[Literal["case_a", "case_b", "rag", "direct"]] = None
+    route: Optional[AgentRoute] = None
 
     # Case A: prediction for one or more existing companies in the DB
     company_identifiers: Optional[list[str]] = None
