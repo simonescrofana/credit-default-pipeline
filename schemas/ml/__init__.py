@@ -1,1 +1,1 @@
-"""Provide schema definitions for machine learning inference"""
+"""Provide schema definitions for machine learning inference."""

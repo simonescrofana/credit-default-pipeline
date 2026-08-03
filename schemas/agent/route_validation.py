@@ -10,8 +10,6 @@ so the set of valid routes is defined once, not duplicated.
 
 """
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 from schemas.agent.types import AgentRoute

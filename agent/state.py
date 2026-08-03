@@ -9,11 +9,11 @@ relevant to the request.
 
 """
 
-from typing import Any, Literal, Optional
-
-from schemas.agent.types import AgentRoute
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
+
+from schemas.agent.types import AgentRoute
 
 
 class AgentState(BaseModel):
