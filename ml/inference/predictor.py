@@ -1,12 +1,13 @@
 """Serve predictions for existing companies using the production XGBoost model.
 
-Provide the inference entry point for scoring a company already present in
-the star schema, reusing the same fitted preprocessing transformations
-produced during training. Every prediction is explained via SHAP (see
-`ml.evaluation.explainability`), since XGBoost is the only model family
-served in production. Support for scoring companies not present in the
-database (arbitrary user-supplied data) is a separate, still-to-be-implemented
-entry point.
+Provide the inference entry points for scoring a company already present in
+the star schema (`predict`) and for ad hoc, user-supplied company data not
+in the database (`predict_from_raw_data`), reusing the same fitted
+preprocessing transformations produced during training. Every prediction is
+explained via SHAP (see `ml.evaluation.explainability`), since XGBoost is
+the only model family served in production. Both entry points always score
+against `loaded_model.threshold`, the decision threshold selected for the
+loaded run, never a caller-supplied value.
 
 """
 
@@ -81,7 +82,6 @@ def retrieve_company_data(session: Session, company_id: int) -> pd.DataFrame:
 def score_features(
     raw_features: pd.DataFrame,
     loaded_model: LoadedModel,
-    threshold: float,
 ) -> tuple[float, int, dict]:
     """Apply preprocessing, scoring, and SHAP explanation to a single-row DataFrame.
 
@@ -94,11 +94,13 @@ def score_features(
     Args:
         raw_features (pd.DataFrame): A single-row feature DataFrame, not
             yet encoded or scaled.
-        loaded_model (LoadedModel): The model, encoder, scaler, and
-            explainer bundle, as returned by
-            `ml.inference.model_loader.load_model`.
-        threshold (float): The decision threshold used to convert the
-            predicted probability into a binary class.
+        loaded_model (LoadedModel): The model, encoder, scaler, explainer,
+            and decision threshold bundle, as returned by
+            `ml.inference.model_loader.load_model`. The threshold used to
+            convert the predicted probability into a binary class is
+            always `loaded_model.threshold`, never a caller-supplied
+            value, so a prediction can never be scored against a
+            threshold inconsistent with the run it came from.
 
     Returns:
         tuple[float, int, dict]: `(probability, predicted_class,
@@ -111,7 +113,7 @@ def score_features(
         features, _ = scale_features(features, scaler=loaded_model.scaler)
 
     probability = loaded_model.model.predict_proba(features)[0, 1]
-    predicted_class = int(probability >= threshold)
+    predicted_class = int(probability >= loaded_model.threshold)
     explanation = explain_prediction(loaded_model.explainer, features)
 
     return float(probability), predicted_class, explanation
@@ -121,7 +123,6 @@ def predict(
     session: Session,
     company_id: int,
     loaded_model: LoadedModel,
-    threshold: float,
 ) -> PredictionResult:
     """Predict insolvency risk for an existing company using its latest snapshot.
 
@@ -134,14 +135,12 @@ def predict(
         session (Session): An active SQLAlchemy session, managed by the
             caller.
         company_id (int): The identifier of the company to score.
-        loaded_model (LoadedModel): The model, encoder, scaler, and
-            explainer bundle, as returned by
+        loaded_model (LoadedModel): The model, encoder, scaler, explainer,
+            and decision threshold bundle, as returned by
             `ml.inference.model_loader.load_model`. Must come directly from
             a single `load_model` call, since its artifacts are only
             guaranteed to be mutually consistent when loaded together from
             the same run.
-        threshold (float): The decision threshold used to convert the
-            predicted probability into a binary class.
 
     Returns:
         PredictionResult: The predicted probability, class, and (once SHAP
@@ -152,7 +151,8 @@ def predict(
     company_df = retrieve_company_data(session, company_id)
 
     probability, predicted_class, explanation = score_features(
-        company_df, loaded_model, threshold
+        company_df,
+        loaded_model,
     )
 
     logger.info(
@@ -173,7 +173,6 @@ def predict(
 def predict_from_raw_data(
     request: InsolvencyPredictionRequest,
     loaded_model: LoadedModel,
-    threshold: float,
 ) -> PredictionResult:
     """Predict insolvency risk for a company not present in the star schema.
 
@@ -190,11 +189,9 @@ def predict_from_raw_data(
     Args:
         request (InsolvencyPredictionRequest): The validated ad hoc company
             data to score.
-        loaded_model (LoadedModel): The model, encoder, scaler, and
-            explainer bundle, as returned by
+        loaded_model (LoadedModel): The model, encoder, scaler, explainer,
+            and decision threshold bundle, as returned by
             `ml.inference.model_loader.load_model`.
-        threshold (float): The decision threshold used to convert the
-            predicted probability into a binary class.
 
     Returns:
         PredictionResult: The predicted probability, class, and a SHAP-based
@@ -235,7 +232,7 @@ def predict_from_raw_data(
     raw_features[numeric_cols] = raw_features[numeric_cols].astype("float64")
 
     probability, predicted_class, explanation = score_features(
-        raw_features, loaded_model, threshold
+        raw_features, loaded_model
     )
 
     logger.info(

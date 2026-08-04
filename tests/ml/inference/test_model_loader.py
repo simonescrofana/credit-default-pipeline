@@ -7,6 +7,7 @@ without one, and with an explicit run_id (skipping the search entirely).
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from xgboost import XGBClassifier
 
@@ -58,6 +59,7 @@ def test_load_model_happy_path_with_scaler(
         _fake_artifact("encoder"),
         _fake_artifact("scaler"),
     ]
+    mock_client.get_run.return_value.data.params = {"selected_threshold": "0.458"}
     mock_client_class.return_value = mock_client
 
     result = load_model(experiment_name="xgboost_model")
@@ -67,6 +69,7 @@ def test_load_model_happy_path_with_scaler(
     assert isinstance(result.encoder, OneHotEncoder)
     assert isinstance(result.scaler, StandardScaler)
     assert result.explainer is fake_explainer
+    assert result.threshold == pytest.approx(0.458)
 
     mock_xgboost_load_model.assert_called_once_with("runs:/run_abc/model")
     mock_sklearn_load_model.assert_any_call("runs:/run_abc/encoder")
@@ -107,6 +110,7 @@ def test_load_model_happy_path_without_scaler(
         _fake_artifact("model"),
         _fake_artifact("encoder"),
     ]
+    mock_client.get_run.return_value.data.params = {"selected_threshold": "0.5"}
     mock_client_class.return_value = mock_client
 
     result = load_model(experiment_name="xgboost_model")
@@ -115,6 +119,7 @@ def test_load_model_happy_path_without_scaler(
     assert result.model is fake_model
     assert isinstance(result.encoder, OneHotEncoder)
     assert result.scaler is None
+    assert result.threshold == pytest.approx(0.5)
 
     # scaler was never requested, since it wasn't in the artifact list
     for call in mock_sklearn_load_model.call_args_list:
@@ -149,6 +154,7 @@ def test_load_model_with_explicit_run_id_skips_search(
         _fake_artifact("encoder"),
         _fake_artifact("scaler"),
     ]
+    mock_client.get_run.return_value.data.params = {"selected_threshold": "0.458"}
     mock_client_class.return_value = mock_client
 
     result = load_model(experiment_name="xgboost_model", run_id="run_pinned")
@@ -194,8 +200,45 @@ def test_load_model_uses_default_experiment_name(
         _fake_artifact("model"),
         _fake_artifact("encoder"),
     ]
+    mock_client.get_run.return_value.data.params = {"selected_threshold": "0.4"}
     mock_client_class.return_value = mock_client
 
     load_model()
 
     mock_get_experiment.assert_called_once_with("xgboost_model")
+
+
+@patch("ml.inference.model_loader.build_explainer")
+@patch("ml.inference.model_loader.MlflowClient")
+@patch("ml.inference.model_loader.mlflow.sklearn.load_model")
+@patch("ml.inference.model_loader.mlflow.xgboost.load_model")
+@patch("ml.inference.model_loader.mlflow.search_runs")
+@patch("ml.inference.model_loader.mlflow.get_experiment_by_name")
+def test_load_model_raises_when_threshold_not_logged(
+    mock_get_experiment,
+    mock_search_runs,
+    mock_xgboost_load_model,
+    mock_sklearn_load_model,
+    mock_client_class,
+    mock_build_explainer,
+) -> None:
+    """Verify load_model fails fast if the run has no selected_threshold param."""
+    mock_get_experiment.return_value = MagicMock(experiment_id="4")
+
+    fake_search_result = MagicMock()
+    fake_search_result.iloc = [{"run_id": "run_no_threshold"}]
+    mock_search_runs.return_value = fake_search_result
+
+    mock_xgboost_load_model.return_value = MagicMock(spec=XGBClassifier)
+    mock_sklearn_load_model.side_effect = [OneHotEncoder()]
+
+    mock_client = MagicMock()
+    mock_client.list_artifacts.return_value = [
+        _fake_artifact("model"),
+        _fake_artifact("encoder"),
+    ]
+    mock_client.get_run.return_value.data.params = {}
+    mock_client_class.return_value = mock_client
+
+    with pytest.raises(KeyError):
+        load_model(experiment_name="xgboost_model")

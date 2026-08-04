@@ -79,6 +79,7 @@ def test_predict_happy_path(mock_retrieve, mock_score, db_session: Session) -> N
         encoder=MagicMock(),
         scaler=MagicMock(),
         explainer=MagicMock(),
+        threshold=0.5,
     )
 
     retrieved_df = pd.DataFrame({"feature": [1]})
@@ -86,9 +87,7 @@ def test_predict_happy_path(mock_retrieve, mock_score, db_session: Session) -> N
     fake_explanation = {"feature": {"value": 1, "shap": 0.2}}
     mock_score.return_value = (0.7, 1, fake_explanation)
 
-    result = predict(
-        session=db_session, company_id=1, loaded_model=loaded_model, threshold=0.5
-    )
+    result = predict(session=db_session, company_id=1, loaded_model=loaded_model)
 
     assert isinstance(result, PredictionResult)
     assert result.company_id == 1
@@ -100,7 +99,6 @@ def test_predict_happy_path(mock_retrieve, mock_score, db_session: Session) -> N
     called_args = mock_score.call_args.args
     assert called_args[0].equals(retrieved_df)
     assert called_args[1] is loaded_model
-    assert called_args[2] == 0.5
 
 
 @patch("ml.inference.predictor.score_features")
@@ -113,6 +111,7 @@ def test_predict_from_raw_data_happy_path(mock_retrieve, mock_score) -> None:
         encoder=MagicMock(),
         scaler=None,
         explainer=MagicMock(),
+        threshold=0.5,
     )
 
     request = InsolvencyPredictionRequest(
@@ -125,9 +124,7 @@ def test_predict_from_raw_data_happy_path(mock_retrieve, mock_score) -> None:
     fake_explanation = {"unpaid_ratio_trailing_90d": {"value": 0.3, "shap": 0.5}}
     mock_score.return_value = (0.6, 1, fake_explanation)
 
-    result = predict_from_raw_data(
-        request=request, loaded_model=loaded_model, threshold=0.5
-    )
+    result = predict_from_raw_data(request=request, loaded_model=loaded_model)
 
     assert isinstance(result, PredictionResult)
     assert result.company_id is None
@@ -145,14 +142,17 @@ def test_predict_from_raw_data_happy_path(mock_retrieve, mock_score) -> None:
     assert passed_df.iloc[0]["total_outstanding_debt"] == 15000.0
     assert passed_df.iloc[0]["industry_sector"] == "manufacturing"
     assert called_args[1] is loaded_model
-    assert called_args[2] == 0.5
 
 
 @patch("ml.inference.predictor.score_features")
 def test_predict_from_raw_data_casts_numeric_columns_to_float64(mock_score) -> None:
     """Verify every column except categorical ones is cast to float64 before scoring."""
     loaded_model = LoadedModel(
-        model=MagicMock(), encoder=MagicMock(), scaler=None, explainer=MagicMock()
+        model=MagicMock(),
+        encoder=MagicMock(),
+        scaler=None,
+        explainer=MagicMock(),
+        threshold=0.5,
     )
 
     request = InsolvencyPredictionRequest(
@@ -164,7 +164,7 @@ def test_predict_from_raw_data_casts_numeric_columns_to_float64(mock_score) -> N
 
     mock_score.return_value = (0.5, 0, {})
 
-    predict_from_raw_data(request=request, loaded_model=loaded_model, threshold=0.5)
+    predict_from_raw_data(request=request, loaded_model=loaded_model)
 
     passed_df = mock_score.call_args.args[0]
 
@@ -193,6 +193,7 @@ def test_score_features_applies_scaling_when_scaler_is_present(
         encoder=MagicMock(),
         scaler=fake_scaler,
         explainer=fake_explainer,
+        threshold=0.5,
     )
 
     encoded_df = pd.DataFrame({"feature": [1]})
@@ -204,7 +205,7 @@ def test_score_features_applies_scaling_when_scaler_is_present(
 
     raw_features = pd.DataFrame({"feature": [1]})
     probability, predicted_class, explanation = score_features(
-        raw_features, loaded_model, threshold=0.5
+        raw_features, loaded_model
     )
 
     assert probability == pytest.approx(0.6)
@@ -227,7 +228,11 @@ def test_score_features_skips_scaling_when_scaler_is_none(
     fake_model.predict_proba.return_value = np.array([[0.9, 0.1]])
     fake_explainer = MagicMock()
     loaded_model = LoadedModel(
-        model=fake_model, encoder=MagicMock(), scaler=None, explainer=fake_explainer
+        model=fake_model,
+        encoder=MagicMock(),
+        scaler=None,
+        explainer=fake_explainer,
+        threshold=0.5,
     )
 
     encoded_df = pd.DataFrame({"feature": [1]})
@@ -237,7 +242,8 @@ def test_score_features_skips_scaling_when_scaler_is_none(
 
     raw_features = pd.DataFrame({"feature": [1]})
     probability, predicted_class, explanation = score_features(
-        raw_features, loaded_model, threshold=0.5
+        raw_features,
+        loaded_model,
     )
 
     assert probability == pytest.approx(0.1)
@@ -258,19 +264,31 @@ def test_score_features_applies_threshold_to_predicted_class(
     """Test predicted_class is derived by the probability with threshold."""
     fake_model = MagicMock()
     fake_model.predict_proba.return_value = np.array([[0.7, 0.3]])
-    loaded_model = LoadedModel(
-        model=fake_model, encoder=MagicMock(), scaler=None, explainer=MagicMock()
+
+    loaded_model_high_threshold = LoadedModel(
+        model=fake_model,
+        encoder=MagicMock(),
+        scaler=None,
+        explainer=MagicMock(),
+        threshold=0.5,
+    )
+    loaded_model_low_threshold = LoadedModel(
+        model=fake_model,
+        encoder=MagicMock(),
+        scaler=None,
+        explainer=MagicMock(),
+        threshold=0.2,
     )
 
     mock_encode.return_value = (pd.DataFrame({"feature": [1]}), MagicMock())
     mock_explain.return_value = {}
 
     _, predicted_class_below, _ = score_features(
-        pd.DataFrame({"feature": [1]}), loaded_model, threshold=0.5
+        pd.DataFrame({"feature": [1]}), loaded_model_high_threshold
     )
     assert predicted_class_below == 0
 
     _, predicted_class_above, _ = score_features(
-        pd.DataFrame({"feature": [1]}), loaded_model, threshold=0.2
+        pd.DataFrame({"feature": [1]}), loaded_model_low_threshold
     )
     assert predicted_class_above == 1
