@@ -31,6 +31,11 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 ---
  
 ## 🧠 Architectural Decisions & Rationale
+
+
+#### Modern Python Tooling (`uv` + Ruff)
+* **Choice:** Moving away from standard `pip`/`venv` and selecting `uv` as the exclusive dependency manager alongside Ruff for quality gating.
+* **Justification:** `uv` provides blazing-fast environment synchronization and strict, deterministic lockfile management, eliminating the "it works on my machine" anti-pattern in production containers. Ruff guarantees lightning-fast code linting and formatting compliance natively during pre-commit and CI stages.
  
 #### Complete Isolation of OLTP and OLAP Store
 * **Choice:** Running an analytical dbt layer over isolated analytical tables instead of running feature engineering queries straight against live application tables.
@@ -76,9 +81,17 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 * **Choice:** XGBoost is the only model family explained via SHAP (`ml/evaluation/explainability.py`, built on `TreeExplainer`), since only the best-performing model is ever deployed, and prior benchmarking already pointed to XGBoost, investing explainability effort in the baseline or MLP would not translate into production value. That same SHAP analysis (see the beeswarm plot in `ml/evaluation/plots.ipynb`) directly drives which fields are required versus optional in the `InsolvencyPredictionRequest` Pydantic schema used to validate ad hoc predictions for companies not yet in the database: the two dominant features (`unpaid_ratio_trailing_90d`, `total_outstanding_debt`) are mandatory, while the rest are optional and left as NaN when omitted.
 * **Justification:** This ties the validation layer's strictness to actual, measured feature importance rather than an arbitrary judgment call about which fields "feel" necessary, and lets XGBoost's native missing-value handling (the model is trained with `handle_nan=False`) degrade gracefully on the fields it relies on least.
 
-#### Modern Python Tooling (`uv` + Ruff)
-* **Choice:** Moving away from standard `pip`/`venv` and selecting `uv` as the exclusive dependency manager alongside Ruff for quality gating.
-* **Justification:** `uv` provides blazing-fast environment synchronization and strict, deterministic lockfile management, eliminating the "it works on my machine" anti-pattern in production containers. Ruff guarantees lightning-fast code linting and formatting compliance natively during pre-commit and CI stages.
+#### Router-First Agent Design
+* **Choice:** The agent's graph classifies every incoming request into one of four explicit routes (`case_a`, `case_b`, `rag`, `direct`) before any downstream node runs, rather than always invoking retrieval "just in case" and falling back when nothing relevant comes back.
+* **Justification:** Retrieval is not free: every ChromaDB query adds latency and risks injecting irrelevant context into the prompt for requests that don't need it (e.g. a greeting or an out-of-scope question). An explicit router keeps each path in the graph doing only the work it actually needs, at the cost of depending on the router's own classification accuracy.
+
+#### Single Source of Truth for the Agent's Routing Type
+* **Choice:** The `Literal` of valid routes is defined once, as `AgentRoute` in `schemas/agent/types.py`, and reused both by `RouterDecision` (the schema constraining the router LLM's structured output) and by `AgentState.route` (the graph's own state). The router's LLM output is validated against `RouterDecision` alone rather than the full `AgentState`, keeping the model's output surface limited to the one field it is actually responsible for producing.
+* **Justification:** The two schemas serve different purposes — one shapes what the LLM is allowed to return, the other is the graph's source of truth — but they must always agree on the same set of valid routes. Defining that set once and importing it in both places removes the possibility of the two drifting out of sync if a new route is ever added.
+
+#### Groq as the LLM Hosting Provider
+* **Choice:** The agent's LLM calls are served via Groq, currently using `llama-3.3-70b-versatile`, rather than a locally self-hosted open-weight model.
+* **Justification:** The project's local hardware is CPU-only, ruling out running a model of this size directly. Groq offers a genuinely free tier (no credit card required) with low-latency inference over open-weight models, making it a better fit than a smaller, locally runnable model that would trade off response quality.
 
 ---
 
@@ -107,7 +120,7 @@ XGBoost is the strongest model on every metric except recall, where the MLP reac
 * **MLOps & Model Tracking:** MLflow
 * **QA & Enterprise Validation:** Pytest, Pydantic Validation
 * **Observability & Logging:** Pydantic Logfire, Ruff
-* **Generative AI Infrastructure:** LangGraph, ChromaDB
+* **Generative AI Infrastructure:** LangGraph, ChromaDB, Groq
 * **Application Layer & UI:** FastAPI, Streamlit
 
 ---
@@ -124,6 +137,17 @@ insolvency_prediction_project/
 │   │   └── main.yml
 │   └── pull_request_template.md
 ├── agent/
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── llm_responder.py
+│   ├── nodes/
+│   │   ├── __init__.py
+│   │   └── router.py
+│   ├── prompts/
+│   │   ├── __init__.py
+│   │   └── router_prompt.py
+│   ├── __init__.py
+│   └── state.py
 ├── analytics/
 │   ├── dbt_project/
 │   │   ├── analyses
@@ -280,16 +304,30 @@ insolvency_prediction_project/
 │   ├── __init__.py
 │   └── run_training.py
 ├── schemas/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── insolvency_prediction.py
-│   ├── models_validation.py
-│   └── types.py
+│   ├── agent/
+│   │   ├── __init__.py
+│   │   ├── route_validation.py
+│   │   └── types.py
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── models_validation.py
+│   │   └── types.py
+│   └── ml/
+│       ├── __init__.py
+│       └── insolvency_prediction.py 
 ├── simulation/
 │   ├── __init__.py
 │   ├── profiles.py
 │   └── seed.py
 ├── tests/
+│   ├── agent/
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   └── test_llm_responder.py
+│   │   ├── nodes/
+│   │   │   ├── __init__.py
+│   │   │   └── test_router.py
 │   ├── analytics/
 │   │   ├── ingestion/
 │   │   │   ├── __init__.py
@@ -324,9 +362,15 @@ insolvency_prediction_project/
 │   │   ├── __init__.py
 │   │   └── test_run_training.py
 │   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── test_insolvency_prediction.py
-│   │   └── test_models_validation.py
+│   │   ├── agent/
+│   │   │   └── __init__.py
+│   │   ├── database/
+│   │   │   ├── __init__.py
+│   │   │   └── test_models_validation.py
+│   │   ├── ml/
+│   │   │   ├── __init__.py
+│   │   │   └── test_insolvency_prediction.py
+│   │   └── __init__.py
 │   ├── simulation/
 │   │   ├── __init__.py
 │   │   └── test_seed.py

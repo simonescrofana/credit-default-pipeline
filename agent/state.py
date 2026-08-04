@@ -26,8 +26,14 @@ class AgentState(BaseModel):
         route (AgentRoute | None): The path chosen by the router node. See
             `schemas.agent.types.AgentRoute` for the set of possible values.
         company_identifiers (list[str] | None): Company identifiers (e.g.
-            VAT number or legal name) extracted from the prompt for case_a.
+            VAT number or legal name) extracted from the prompt for case_a,
+            as free text, before being resolved against the database.
             Supports multiple companies in a single request.
+        resolved_company_ids (list[int] | None): The `company_id` values
+            resolved by the extractor node from `company_identifiers`, one
+            per identifier that matched a company in the database. An
+            identifier with no match does not appear here; it is instead
+            recorded in `prediction_errors`.
         raw_prediction_input (dict | None): Raw, unvalidated feature dict
             extracted from the prompt for case_b, to be validated by
             `schemas.insolvency_prediction.InsolvencyPredictionRequest`
@@ -59,6 +65,7 @@ class AgentState(BaseModel):
 
     # Case A: prediction for one or more existing companies in the DB
     company_identifiers: Optional[list[str]] = None
+    resolved_company_ids: Optional[list[int]] = None
 
     # Case B: prediction on user-provided data
     raw_prediction_input: Optional[dict[str, Any]] = None
