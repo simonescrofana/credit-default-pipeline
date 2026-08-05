@@ -82,16 +82,24 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 * **Justification:** This ties the validation layer's strictness to actual, measured feature importance rather than an arbitrary judgment call about which fields "feel" necessary, and lets XGBoost's native missing-value handling (the model is trained with `handle_nan=False`) degrade gracefully on the fields it relies on least.
 
 #### Router-First Agent Design
-* **Choice:** The agent's graph classifies every incoming request into one of four explicit routes (`case_a`, `case_b`, `rag`, `direct`) before any downstream node runs, rather than always invoking retrieval "just in case" and falling back when nothing relevant comes back.
+* **Choice:** The agent's graph classifies every incoming request into one of four explicit routes (`case_a`, `case_b`, `rag`, `direct`) before any downstream node runs. The alternative considered was invoking retrieval unconditionally on every request and relying on a low similarity score to fall back to a direct answer when nothing relevant came back.
 * **Justification:** Retrieval is not free: every ChromaDB query adds latency and risks injecting irrelevant context into the prompt for requests that don't need it (e.g. a greeting or an out-of-scope question). An explicit router keeps each path in the graph doing only the work it actually needs, at the cost of depending on the router's own classification accuracy.
 
 #### Single Source of Truth for the Agent's Routing Type
 * **Choice:** The `Literal` of valid routes is defined once, as `AgentRoute` in `schemas/agent/types.py`, and reused both by `RouterDecision` (the schema constraining the router LLM's structured output) and by `AgentState.route` (the graph's own state). The router's LLM output is validated against `RouterDecision` alone rather than the full `AgentState`, keeping the model's output surface limited to the one field it is actually responsible for producing.
 * **Justification:** The two schemas serve different purposes — one shapes what the LLM is allowed to return, the other is the graph's source of truth — but they must always agree on the same set of valid routes. Defining that set once and importing it in both places removes the possibility of the two drifting out of sync if a new route is ever added.
 
-#### Groq as the LLM Hosting Provider
+#### Groq as the LLM Hosting Provider (`llama-3.3-70b-versatile`)
 * **Choice:** The agent's LLM calls are served via Groq, currently using `llama-3.3-70b-versatile`, rather than a locally self-hosted open-weight model.
 * **Justification:** The project's local hardware is CPU-only, ruling out running a model of this size directly. Groq offers a genuinely free tier (no credit card required) with low-latency inference over open-weight models, making it a better fit than a smaller, locally runnable model that would trade off response quality.
+
+#### Extraction, Not Query or Feature Generation
+* **Choice:** The extractor node never lets the LLM produce SQL or a ready-to-use feature DataFrame. For case_a, the LLM only extracts free-text company identifiers (legal name or VAT number) via structured output; resolving an identifier into a `company_id` is done by a parameterized, code-written query, never a query the model itself constructs. For case_b, the LLM extracts data into a deliberately permissive intermediate schema, every field optional and unconstrained, which is then validated for real against `InsolvencyPredictionRequest`; a validation failure is recorded rather than raised, so the responder node can explain to the user what is missing or invalid.
+* **Justification:** Letting an LLM generate SQL from free text opens the door to injection-shaped risk that has nothing to do with a malicious user, an LLM producing a malformed or unsafe query is enough. Separating "what did the user say" (the LLM's job) from "is it enough, and is it valid" (`InsolvencyPredictionRequest`'s job) also prevents an LLM extraction quirk, such as defaulting an unstated qualitative claim ("heavily indebted") to an invented number, from silently masquerading as real user-supplied data feeding a financial prediction model.
+
+#### Single Source of Truth for the Decision Threshold
+* **Choice:** `predict` and `predict_from_raw_data` no longer accept a `threshold` parameter from the caller; both always score against `loaded_model.threshold`, read directly from the `selected_threshold` MLflow param logged on the final training run (see `evaluation/plots.ipynb`) when the model bundle is loaded.
+* **Justification:** With `threshold` as a separate caller-supplied argument, nothing prevented a prediction from being scored against a threshold inconsistent with the one the model was actually tuned against. Centralizing it inside the loaded model bundle removes that possibility entirely, at the cost of `load_model` failing fast if a run has no threshold logged, a deliberate trade-off, given a run without one isn't ready to serve predictions in the first place.
 
 ---
 
@@ -142,9 +150,12 @@ insolvency_prediction_project/
 │   │   └── llm_responder.py
 │   ├── nodes/
 │   │   ├── __init__.py
+│   │   ├── extractor.py
+│   │   ├── predictor_node.py
 │   │   └── router.py
 │   ├── prompts/
 │   │   ├── __init__.py
+│   │   ├── extractor_prompt.py
 │   │   └── router_prompt.py
 │   ├── __init__.py
 │   └── state.py
@@ -306,6 +317,7 @@ insolvency_prediction_project/
 ├── schemas/
 │   ├── agent/
 │   │   ├── __init__.py
+│   │   ├── extraction_validation.py
 │   │   ├── route_validation.py
 │   │   └── types.py
 │   ├── database/
@@ -327,6 +339,8 @@ insolvency_prediction_project/
 │   │   │   └── test_llm_responder.py
 │   │   ├── nodes/
 │   │   │   ├── __init__.py
+│   │   │   ├── test_extractor.py
+│   │   │   ├── test_predictor_node.py
 │   │   │   └── test_router.py
 │   ├── analytics/
 │   │   ├── ingestion/
