@@ -230,3 +230,6 @@ mlartifacts/
 # Tuning models
 ml/tuning/logs/*
 *.bak
+
+# VectorDB data
+agent/data/
