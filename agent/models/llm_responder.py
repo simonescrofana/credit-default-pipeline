@@ -15,7 +15,7 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
-RESPONDER_MODEL_NAME = "llama-3.3-70b-versatile"
+RESPONDER_MODEL_NAME = "openai/gpt-oss-120b"
 
 
 def get_responder_llm(temperature: float = 0.7) -> ChatGroq:
