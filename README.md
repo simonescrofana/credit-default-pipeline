@@ -29,6 +29,30 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 6. **Application & Serving Layer:** A FastAPI backend exposing validated REST endpoints for predictions and chat interactions, paired with a Streamlit interface acting as a live, interactive demo of the full pipeline.
 
 ---
+
+## 🤖 Agent Graph
+ 
+The Generative AI layer is built as an explicit LangGraph state machine. A router node classifies every incoming request into one of four routes; three of them converge on a shared LLM response node, which is itself validated by an LLM-as-a-Judge node before the response is returned to the user:
+ 
+```mermaid
+graph TD
+    START([User Prompt]) --> ROUTER{Router}
+ 
+    ROUTER -->|Prediction for existing company| CASOA[Prediction Node<br/>Case A]
+    ROUTER -->|Prediction from ad hoc data| CASOB[Prediction Node<br/>Case B]
+    ROUTER -->|Documentation/project question| RAG[RAG Node]
+    ROUTER -->|Generic question| RISPOSTA[LLM Response Node]
+ 
+    CASOA --> RISPOSTA
+    CASOB --> RISPOSTA
+    RAG --> RISPOSTA
+ 
+    RISPOSTA --> JUDGE{LLM-as-a-Judge}
+    JUDGE -->|Reject: regenerate| RISPOSTA
+    JUDGE -->|Approve| END([Final Response])
+```
+ 
+---
  
 ## 🧠 Architectural Decisions & Rationale
 
@@ -101,6 +125,19 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 * **Choice:** `predict` and `predict_from_raw_data` no longer accept a `threshold` parameter from the caller; both always score against `loaded_model.threshold`, read directly from the `selected_threshold` MLflow param logged on the final training run (see `evaluation/plots.ipynb`) when the model bundle is loaded.
 * **Justification:** With `threshold` as a separate caller-supplied argument, nothing prevented a prediction from being scored against a threshold inconsistent with the one the model was actually tuned against. Centralizing it inside the loaded model bundle removes that possibility entirely, at the cost of `load_model` failing fast if a run has no threshold logged, a deliberate trade-off, given a run without one isn't ready to serve predictions in the first place.
 
+
+#### Documentation Extraction via AST/YAML, Never Import
+* **Choice:** `extract_docs.py` reads every Python docstring and dbt model/column description directly from source text (`ast` for `.py` files, `yaml` for `schema.yml`), rather than importing project modules to read `__doc__` via `inspect`.
+* **Justification:** Several modules open real side effects at import time (e.g. a database connection) or pull in heavy dependencies (PyTorch, XGBoost) not needed just to read a docstring; parsing source text avoids triggering any of that.
+
+#### Idempotent RAG Ingestion
+* **Choice:** `ingest.py` deletes and recreates the ChromaDB collection on every run, rather than only upserting new chunks into it.
+* **Justification:** `upsert` alone would leave a chunk orphaned in the index forever once its source (a deleted README section, a removed docstring) disappears. Starting from a clean collection each time means re-running ingestion after any documentation change is always safe, with no manual cleanup step.
+
+#### Format-Matched Context Injection in the Responder
+* **Choice:** The responder node formats the material it injects into the prompt differently depending on its shape, not uniformly as plain text: prediction results/errors (case_a, case_b) are minimal JSON wrapped in an XML-style tag, while retrieved context (rag) is plain text in its own tag.
+* **Justification:** Prediction results are multi-field numeric records the model must cite precisely without mixing up figures across companies or fields, exactly the case where a keyed format outperforms prose; retrieved context is prose the model should synthesize freely, where a keyed format would only add syntactic noise. Prompt format affects an LLM's reasoning mode, not just output structure, so the format is chosen per material rather than fixed for the whole prompt.
+
 ---
 
 ## 📊 Results
@@ -151,13 +188,23 @@ insolvency_prediction_project/
 │   ├── nodes/
 │   │   ├── __init__.py
 │   │   ├── extractor.py
+│   │   ├── judge.py
 │   │   ├── predictor_node.py
+│   │   ├── responder.py
+│   │   ├── retriever_node.py
 │   │   └── router.py
 │   ├── prompts/
 │   │   ├── __init__.py
 │   │   ├── extractor_prompt.py
+│   │   ├── responder_prompt.py
 │   │   └── router_prompt.py
+│   ├── rag/
+│   │   ├── __init__.py
+│   │   ├── extract_docs.py
+│   │   ├── ingest.py
+│   │   └── retrieval.py
 │   ├── __init__.py
+│   ├── graph.py
 │   └── state.py
 ├── analytics/
 │   ├── dbt_project/
@@ -325,9 +372,10 @@ insolvency_prediction_project/
 │   │   ├── base.py
 │   │   ├── models_validation.py
 │   │   └── types.py
-│   └── ml/
-│       ├── __init__.py
-│       └── insolvency_prediction.py 
+│   ├── ml/
+│   │   ├── __init__.py
+│   │   └── insolvency_prediction.py
+│   └── __init__.py
 ├── simulation/
 │   ├── __init__.py
 │   ├── profiles.py
@@ -340,8 +388,17 @@ insolvency_prediction_project/
 │   │   ├── nodes/
 │   │   │   ├── __init__.py
 │   │   │   ├── test_extractor.py
+│   │   │   ├── test_judge.py
 │   │   │   ├── test_predictor_node.py
+│   │   │   ├── test_responder.py
+│   │   │   ├── test_retriever.py
 │   │   │   └── test_router.py
+│   │   ├── rag/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_extract_docs.py
+│   │   │   ├── test_ingest.py
+│   │   │   └── test_retrieval.py
+│   │   └── __init__.py
 │   ├── analytics/
 │   │   ├── ingestion/
 │   │   │   ├── __init__.py
@@ -376,8 +433,6 @@ insolvency_prediction_project/
 │   │   ├── __init__.py
 │   │   └── test_run_training.py
 │   ├── schemas/
-│   │   ├── agent/
-│   │   │   └── __init__.py
 │   │   ├── database/
 │   │   │   ├── __init__.py
 │   │   │   └── test_models_validation.py
