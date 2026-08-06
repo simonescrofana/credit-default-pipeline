@@ -187,7 +187,6 @@ def extract_docs(root: Path = PROJECT_ROOT) -> list[dict[str, Any]]:
 
 def main() -> None:
     """Extract every documentation source and write it to OUTPUT_PATH."""
-    setup_logging("INFO")
     documents = extract_docs()
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -197,4 +196,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging("INFO")
     main()

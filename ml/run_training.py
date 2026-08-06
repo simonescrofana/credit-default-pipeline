@@ -198,9 +198,6 @@ def main(models_to_train: list[str] | None = None) -> None:
             model is trained. Defaults to `None`.
 
     """
-    setup_logging("INFO")
-    mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-
     for config in MODEL_CONFIGS:
         if (
             models_to_train is not None
@@ -242,6 +239,8 @@ def main(models_to_train: list[str] | None = None) -> None:
 
 
 if __name__ == "__main__":
+    setup_logging("INFO")
+    mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
     # main(models_to_train=["baseline"]) # to train only baseline model
     # main(models_to_train=["mlp"])  # to train only the MLP model
     # main(models_to_train=["xgboost_model"])  # to train only the XGBoost model

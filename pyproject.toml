@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.18.5",
+    "chromadb>=1.5.9",
     "dbt-core>=1.11.12",
     "dbt-postgres>=1.10.2",
     "dvc>=3.67.1",
