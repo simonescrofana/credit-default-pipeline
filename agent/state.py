@@ -51,8 +51,15 @@ class AgentState(BaseModel):
             similarity score.
         final_answer (str | None): The natural-language response returned
             to the user.
-        judge_verdict (dict | None): Output of the LLM-as-a-Judge node,
-            once introduced.
+        judge_verdict (dict | None): The judge node's evaluation of
+            `final_answer`, an `approved` flag and a `reason` explaining
+            the verdict. `None` for the direct route, which is never
+            evaluated (there is no external material to check a response
+            against).
+        retry_count (int): How many times the judge has rejected a
+            response for the current request, triggering a regeneration.
+            Capped by the graph at a fixed maximum, after which a static
+            fallback message is returned instead of retrying indefinitely.
 
     """
 
@@ -80,5 +87,6 @@ class AgentState(BaseModel):
     # Final output
     final_answer: Optional[str] = None
 
-    # Judge (to be evaluated later)
+    # Judge
     judge_verdict: Optional[dict[str, Any]] = None
+    retry_count: int = 0
