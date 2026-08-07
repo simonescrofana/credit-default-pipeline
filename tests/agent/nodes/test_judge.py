@@ -91,7 +91,7 @@ def test_judge_node_case_b_happy_path(mock_get_judge_llm) -> None:
     user_message = sent_messages[1].content
     assert "<prediction_results>" in user_message
     assert '"probability":0.8' in user_message
-    assert "90% chance of defaulting" in user_message
+    assert "90%% chance of defaulting" in user_message
 
 
 @patch("agent.nodes.judge.get_judge_llm")

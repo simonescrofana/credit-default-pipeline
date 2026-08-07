@@ -1,6 +1,8 @@
 """Extractor node: turns free-text requests into structured data.
 
-Handles the two data-gathering routes decided upstream by the router node:
+Provides `extract_case_a` and `extract_case_b`, one per data-gathering
+route decided upstream by the router node, plus `extractor_node`, a thin
+orchestrator that dispatches to the right one based on `state.route`.
 
 - `extract_case_a`: resolves the company identifiers (legal name or VAT
   number) mentioned in the prompt into `company_id` values, via a
@@ -152,3 +154,20 @@ def extract_case_b(state: AgentState) -> dict:
         "raw_prediction_input": raw_data,
         "prediction_errors": errors,
     }
+
+
+def extractor_node(state: AgentState) -> dict:
+    """Dispatch to the extraction function for the route decided upstream.
+
+    Args:
+        state (AgentState): The current graph state. Reads `route` to
+            decide whether to call `extract_case_a` or `extract_case_b`.
+
+    Returns:
+        dict: The partial state update produced by the dispatched
+            function. See `extract_case_a` and `extract_case_b`.
+
+    """
+    if state.route == "case_a":
+        return extract_case_a(state)
+    return extract_case_b(state)

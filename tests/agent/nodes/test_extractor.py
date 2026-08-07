@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
-from agent.nodes.extractor import extract_case_a, extract_case_b
+from agent.nodes.extractor import extract_case_a, extract_case_b, extractor_node
 from agent.state import AgentState
 from schemas.agent.extraction_validation import CompanyIdentifiers, ExtractedCompanyData
 
@@ -155,3 +155,34 @@ def test_extract_case_b_missing_required_fields_records_error(
 
     assert len(result["prediction_errors"]) == 1
     assert "incomplete or invalid" in result["prediction_errors"][0]
+
+
+@patch("agent.nodes.extractor.extract_case_a")
+def test_extractor_node_dispatches_case_a(mock_extract_case_a) -> None:
+    """Verify extractor_node calls extract_case_a when route is case_a."""
+    mock_extract_case_a.return_value = {
+        "company_identifiers": ["Rossi SRL"],
+        "resolved_company_ids": [1],
+        "prediction_errors": [],
+    }
+
+    state = AgentState(user_input="Rischia default Rossi SRL?", route="case_a")
+    result = extractor_node(state)
+
+    mock_extract_case_a.assert_called_once_with(state)
+    assert result == mock_extract_case_a.return_value
+
+
+@patch("agent.nodes.extractor.extract_case_b")
+def test_extractor_node_dispatches_case_b(mock_extract_case_b) -> None:
+    """Verify extractor_node calls extract_case_b when route is case_b."""
+    mock_extract_case_b.return_value = {
+        "raw_prediction_input": {"unpaid_ratio_trailing_90d": 0.3},
+        "prediction_errors": [],
+    }
+
+    state = AgentState(user_input="What if a company had high debt?", route="case_b")
+    result = extractor_node(state)
+
+    mock_extract_case_b.assert_called_once_with(state)
+    assert result == mock_extract_case_b.return_value
