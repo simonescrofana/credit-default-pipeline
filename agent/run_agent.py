@@ -9,6 +9,7 @@ The loop ends when the user types an exit command, or on Ctrl+c.
 
 import logging
 import os
+
 os.environ["ORT_LOGGING_LEVEL"] = "3"  # 3 = ERROR, silenzia WARNING e INFO
 
 from agent.graph import build_agent

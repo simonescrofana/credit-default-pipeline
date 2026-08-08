@@ -241,7 +241,6 @@ def predict_from_raw_data(
 
     now = datetime.datetime.now()
 
-
     raw_features = pd.DataFrame(
         [
             {

@@ -194,23 +194,23 @@ def test_predict_from_raw_data_derives_year_quarter_month(mock_score) -> None:
         explainer=MagicMock(),
         threshold=0.5,
     )
- 
+
     request = InsolvencyPredictionRequest(
         foundation_date=datetime.date(2015, 3, 1),
         industry_sector="manufacturing",
         unpaid_ratio_trailing_90d=0.3,
         total_outstanding_debt=15000.0,
     )
- 
+
     mock_score.return_value = (0.5, 0, {})
- 
+
     predict_from_raw_data(request=request, loaded_model=loaded_model)
- 
+
     passed_df = mock_score.call_args.args[0]
- 
+
     now = datetime.datetime.now()
     expected_quarter = (now.month - 1) // 3 + 1
- 
+
     assert passed_df.iloc[0]["year"] == float(now.year)
     assert passed_df.iloc[0]["quarter"] == float(expected_quarter)
     assert passed_df.iloc[0]["month"] == float(now.month)
@@ -320,14 +320,14 @@ def test_score_features_reorders_columns_to_match_model_training_order(
         explainer=MagicMock(),
         threshold=0.5,
     )
- 
+
     # encoded_df's own column order is deliberately different from training order
     encoded_df = pd.DataFrame({"a": [1], "b": [2], "c": [3]})
     mock_encode.return_value = (encoded_df, MagicMock())
     mock_explain.return_value = {}
- 
+
     score_features(pd.DataFrame({"a": [1], "b": [2], "c": [3]}), loaded_model)
- 
+
     predict_proba_arg = fake_model.predict_proba.call_args.args[0]
     assert list(predict_proba_arg.columns) == ["b", "a", "c"]
 
