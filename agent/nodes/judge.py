@@ -12,12 +12,14 @@ that dispatch is `graph.py`'s responsibility, not this module's.
 
 import logging
 
+from groq import BadRequestError
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agent.models.llm_judge import get_judge_llm
 from agent.nodes.responder import build_material
 from agent.prompts.judge_prompt import JUDGE_SYSTEM_PROMPT
 from agent.state import AgentState
+from agent.utils.llm_utils import MAX_RETRIES, invoke_with_retry
 from schemas.agent.judge_validation import JudgeVerdict
 
 logger = logging.getLogger(__name__)
@@ -53,7 +55,21 @@ def judge_node(state: AgentState) -> dict:
     ]
 
     logger.info("Judging response for route '%s'...", state.route)
-    verdict: JudgeVerdict = structured_llm.invoke(messages)
-    logger.info("Judge verdict: approved=%s.", verdict.approved)
+    try:
+        verdict: JudgeVerdict = invoke_with_retry(
+            structured_llm, messages, max_retries=MAX_RETRIES
+        )
+        logger.info("Judge verdict: approved=%s.", verdict.approved)
+    except BadRequestError:
+        logger.warning(
+            "Judge LLM failed to produce a verdict after %d attempts; "
+            "defaulting to approved.",
+            MAX_RETRIES,
+        )
+        verdict = JudgeVerdict(
+            approved=True,
+            reason="Judge LLM unavailable after retries; response passed "
+            "through unverified.",
+        )
 
     return {"judge_verdict": verdict.model_dump()}

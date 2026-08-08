@@ -34,6 +34,13 @@ If the context doesn't answer the request, the response should say so \
 plainly; treat a response that fills the gap with plausible-sounding but \
 unsupported information as a failure.
 
+Regardless of which material applies, also verify: the response is \
+written in the same language as the user's original request (given below \
+as their "request"), not the language of any prior conversation turn, not \
+the language of the JSON keys or retrieved text, and not any other \
+language. A response with every other criterion met but in the wrong \
+language is still a failure.
+
 Reach exactly one verdict: approve the response only if it fully meets \
 the relevant criteria above; otherwise reject it. In your reason, name \
 specifically which criterion failed and why, in enough detail that the \

@@ -40,10 +40,24 @@ def format_prediction_material(state: AgentState) -> str:
             nothing to report.
 
     """
-    if not state.prediction_results and not state.prediction_errors:
+    if (
+        not state.company_identifiers
+        and not state.prediction_results
+        and not state.prediction_errors
+    ):
         return ""
 
     parts = []
+    if state.company_identifiers:
+        # The free-text identifiers as extracted from the prompt (e.g. a
+        # legal name or VAT number), so the model can match them against
+        # prediction_results' company_id/company_name — prediction_results
+        # alone never carries the user's original wording.
+        parts.append(
+            "<company_identifiers>\n"
+            + json.dumps(state.company_identifiers, separators=(",", ":"))
+            + "\n</company_identifiers>"
+        )
     if state.prediction_results:
         parts.append(
             "<prediction_results>\n"

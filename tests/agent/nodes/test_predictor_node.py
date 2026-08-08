@@ -39,10 +39,18 @@ def test_predict_case_a_happy_path_multiple_companies(
 
     mock_predict.side_effect = [
         PredictionResult(
-            company_id=1, probability=0.7, predicted_class=1, explanation={}
+            company_id=1,
+            company_name="Company 1",
+            probability=0.7,
+            predicted_class=1,
+            explanation={},
         ),
         PredictionResult(
-            company_id=2, probability=0.1, predicted_class=0, explanation={}
+            company_id=2,
+            company_name="Company 2",
+            probability=0.1,
+            predicted_class=0,
+            explanation={},
         ),
     ]
 
@@ -69,6 +77,7 @@ def test_predict_case_a_one_failure_does_not_stop_the_others(
     mock_predict.side_effect = [
         PredictionResult(
             company_id=1,
+            company_name="Company 1",
             probability=0.7,
             predicted_class=1,
             explanation={},
@@ -76,6 +85,7 @@ def test_predict_case_a_one_failure_does_not_stop_the_others(
         SQLAlchemyError("connection lost"),
         PredictionResult(
             company_id=3,
+            company_name="Company 3",
             probability=0.2,
             predicted_class=0,
             explanation={},
@@ -118,7 +128,11 @@ def test_predict_case_a_closes_session_even_on_failure(
 def test_predict_case_b_happy_path(mock_predict_from_raw_data) -> None:
     """Verify predict_case_b validates raw_prediction_input and scores it."""
     mock_predict_from_raw_data.return_value = PredictionResult(
-        company_id=None, probability=0.6, predicted_class=1, explanation={}
+        company_id=None,
+        company_name=None,
+        probability=0.6,
+        predicted_class=1,
+        explanation={},
     )
 
     state = AgentState(

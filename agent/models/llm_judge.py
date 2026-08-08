@@ -15,7 +15,7 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
-JUDGE_MODEL_NAME = "qwen/qwen3.6-27b"
+JUDGE_MODEL_NAME = "openai/gpt-oss-20b"
 
 
 def get_judge_llm(temperature: float = 0.0) -> ChatGroq:

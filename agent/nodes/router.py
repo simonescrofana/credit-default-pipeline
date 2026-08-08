@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from agent.models.llm_responder import get_responder_llm
 from agent.prompts.router_prompt import ROUTER_SYSTEM_PROMPT
 from agent.state import AgentState
+from agent.utils.llm_utils import invoke_with_retry
 from schemas.agent.route_validation import RouterDecision
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ def router_node(state: AgentState) -> dict:
     ]
 
     logger.info("Routing user request...")
-    decision: RouterDecision = structured_llm.invoke(messages)
+    decision: RouterDecision = invoke_with_retry(structured_llm, messages)
     logger.info("Request routed to '%s'.", decision.route)
 
     return {"route": decision.route}

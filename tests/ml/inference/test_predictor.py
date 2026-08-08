@@ -33,21 +33,23 @@ def test_retrieve_company_data_returns_single_row_indexed_by_legal_name(
     """Verify the returned DataFrame has the expected format."""
     fake_data = pd.DataFrame(
         {
-            "company_id": [42],
+            "company_id": [1],
             "snapshot_date": [pd.Timestamp("2026-06-01")],
             "legal_name": ["Alpha Srl"],
             "industry_sector": ["manufacturing"],
+            "is_insolvent": [0],
         }
     )
     mock_read_sql.return_value = fake_data
 
-    result = retrieve_company_data(session=db_session, company_id=42)
+    result = retrieve_company_data(session=db_session, company_id=1)
 
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
     assert result.index.name == "legal_name"
     assert "company_id" not in result.columns
     assert "snapshot_date" not in result.columns
+    assert "is_insolvent" not in result.columns
 
 
 @patch("ml.inference.predictor.pd.read_sql")
@@ -60,6 +62,7 @@ def test_retrieve_company_data_passes_company_id_as_param(
             "company_id": [99],
             "snapshot_date": [pd.Timestamp("2026-01-01")],
             "legal_name": ["X"],
+            "is_insolvent": [1],
         }
     )
 
@@ -82,7 +85,9 @@ def test_predict_happy_path(mock_retrieve, mock_score, db_session: Session) -> N
         threshold=0.5,
     )
 
-    retrieved_df = pd.DataFrame({"feature": [1]})
+    retrieved_df = pd.DataFrame(
+        {"feature": [1]}, index=pd.Index(["Alpha Srl"], name="legal_name")
+    )
     mock_retrieve.return_value = retrieved_df
     fake_explanation = {"feature": {"value": 1, "shap": 0.2}}
     mock_score.return_value = (0.7, 1, fake_explanation)
@@ -91,6 +96,7 @@ def test_predict_happy_path(mock_retrieve, mock_score, db_session: Session) -> N
 
     assert isinstance(result, PredictionResult)
     assert result.company_id == 1
+    assert result.company_name == "Alpha Srl"
     assert result.probability == pytest.approx(0.7)
     assert result.predicted_class == 1
     assert result.explanation == fake_explanation
@@ -128,6 +134,7 @@ def test_predict_from_raw_data_happy_path(mock_retrieve, mock_score) -> None:
 
     assert isinstance(result, PredictionResult)
     assert result.company_id is None
+    assert result.company_name is None
     assert result.probability == pytest.approx(0.6)
     assert result.predicted_class == 1
     assert result.explanation == fake_explanation
@@ -177,6 +184,38 @@ def test_predict_from_raw_data_casts_numeric_columns_to_float64(mock_score) -> N
         )
 
 
+@patch("ml.inference.predictor.score_features")
+def test_predict_from_raw_data_derives_year_quarter_month(mock_score) -> None:
+    """Verify year, quarter, and month are derived server-side, not left missing."""
+    loaded_model = LoadedModel(
+        model=MagicMock(),
+        encoder=MagicMock(),
+        scaler=None,
+        explainer=MagicMock(),
+        threshold=0.5,
+    )
+ 
+    request = InsolvencyPredictionRequest(
+        foundation_date=datetime.date(2015, 3, 1),
+        industry_sector="manufacturing",
+        unpaid_ratio_trailing_90d=0.3,
+        total_outstanding_debt=15000.0,
+    )
+ 
+    mock_score.return_value = (0.5, 0, {})
+ 
+    predict_from_raw_data(request=request, loaded_model=loaded_model)
+ 
+    passed_df = mock_score.call_args.args[0]
+ 
+    now = datetime.datetime.now()
+    expected_quarter = (now.month - 1) // 3 + 1
+ 
+    assert passed_df.iloc[0]["year"] == float(now.year)
+    assert passed_df.iloc[0]["quarter"] == float(expected_quarter)
+    assert passed_df.iloc[0]["month"] == float(now.month)
+
+
 @patch("ml.inference.predictor.explain_prediction")
 @patch("ml.inference.predictor.scale_features")
 @patch("ml.inference.predictor.handle_missing_and_encode")
@@ -186,6 +225,7 @@ def test_score_features_applies_scaling_when_scaler_is_present(
     """Verify score_features scales the encoded features when scaler is present."""
     fake_model = MagicMock()
     fake_model.predict_proba.return_value = np.array([[0.4, 0.6]])
+    fake_model.feature_names_in_ = ["feature"]
     fake_scaler = MagicMock()
     fake_explainer = MagicMock()
     loaded_model = LoadedModel(
@@ -213,8 +253,11 @@ def test_score_features_applies_scaling_when_scaler_is_present(
     assert explanation == fake_explanation
 
     mock_scale.assert_called_once_with(encoded_df, scaler=fake_scaler)
-    fake_model.predict_proba.assert_called_once_with(scaled_df)
-    mock_explain.assert_called_once_with(fake_explainer, scaled_df)
+
+    predict_proba_arg = fake_model.predict_proba.call_args.args[0]
+    assert predict_proba_arg.equals(scaled_df)
+    explain_arg = mock_explain.call_args.args[1]
+    assert explain_arg.equals(scaled_df)
 
 
 @patch("ml.inference.predictor.explain_prediction")
@@ -226,6 +269,7 @@ def test_score_features_skips_scaling_when_scaler_is_none(
     """Verify score_features never calls scale_features when no scaler is passed."""
     fake_model = MagicMock()
     fake_model.predict_proba.return_value = np.array([[0.9, 0.1]])
+    fake_model.feature_names_in_ = ["feature"]
     fake_explainer = MagicMock()
     loaded_model = LoadedModel(
         model=fake_model,
@@ -251,8 +295,41 @@ def test_score_features_skips_scaling_when_scaler_is_none(
     assert explanation == fake_explanation
 
     mock_scale.assert_not_called()
-    fake_model.predict_proba.assert_called_once_with(encoded_df)
-    mock_explain.assert_called_once_with(fake_explainer, encoded_df)
+
+    predict_proba_arg = fake_model.predict_proba.call_args.args[0]
+    assert predict_proba_arg.equals(encoded_df)
+    explain_arg = mock_explain.call_args.args[1]
+    assert explain_arg.equals(encoded_df)
+
+
+@patch("ml.inference.predictor.explain_prediction")
+@patch("ml.inference.predictor.scale_features")
+@patch("ml.inference.predictor.handle_missing_and_encode")
+def test_score_features_reorders_columns_to_match_model_training_order(
+    mock_encode, mock_scale, mock_explain
+) -> None:
+    """Verify columns are reordered to loaded_model.model.feature_names_in_."""
+    fake_model = MagicMock()
+    fake_model.predict_proba.return_value = np.array([[0.7, 0.3]])
+    # training order differs from the order encoded_df happens to have below
+    fake_model.feature_names_in_ = ["b", "a", "c"]
+    loaded_model = LoadedModel(
+        model=fake_model,
+        encoder=MagicMock(),
+        scaler=None,
+        explainer=MagicMock(),
+        threshold=0.5,
+    )
+ 
+    # encoded_df's own column order is deliberately different from training order
+    encoded_df = pd.DataFrame({"a": [1], "b": [2], "c": [3]})
+    mock_encode.return_value = (encoded_df, MagicMock())
+    mock_explain.return_value = {}
+ 
+    score_features(pd.DataFrame({"a": [1], "b": [2], "c": [3]}), loaded_model)
+ 
+    predict_proba_arg = fake_model.predict_proba.call_args.args[0]
+    assert list(predict_proba_arg.columns) == ["b", "a", "c"]
 
 
 @patch("ml.inference.predictor.explain_prediction")
@@ -264,6 +341,7 @@ def test_score_features_applies_threshold_to_predicted_class(
     """Test predicted_class is derived by the probability with threshold."""
     fake_model = MagicMock()
     fake_model.predict_proba.return_value = np.array([[0.7, 0.3]])
+    fake_model.feature_names_in_ = ["feature"]
 
     loaded_model_high_threshold = LoadedModel(
         model=fake_model,

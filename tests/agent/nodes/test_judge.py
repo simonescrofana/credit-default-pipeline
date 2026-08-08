@@ -10,6 +10,9 @@ judge's verdict as a dict in the state update.
 
 from unittest.mock import MagicMock, patch
 
+import httpx
+from groq import BadRequestError
+
 from agent.nodes.judge import judge_node
 from agent.state import AgentState
 from schemas.agent.judge_validation import JudgeVerdict
@@ -131,3 +134,42 @@ def test_judge_node_rag_happy_path(mock_get_judge_llm) -> None:
     assert "<retrieved_context>" in user_message
     assert "Groq offers a genuinely free tier." in user_message
     assert "Groq was chosen for its free tier." in user_message
+
+
+@patch("agent.nodes.judge.get_judge_llm")
+def test_judge_node_defaults_to_approved_when_llm_exhausts_retries(
+    mock_get_judge_llm,
+) -> None:
+    """Verify the judge falls back to a default-approved verdict, not a crash."""
+    mock_llm = MagicMock()
+    mock_structured_llm = MagicMock()
+
+    response = httpx.Response(
+        status_code=400,
+        request=httpx.Request("POST", "https://api.groq.com/test"),
+    )
+    mock_structured_llm.invoke.side_effect = BadRequestError(
+        "test message",
+        response=response,
+        body={"error": {"code": "tool_use_failed"}},
+    )
+    mock_llm.with_structured_output.return_value = mock_structured_llm
+    mock_get_judge_llm.return_value = mock_llm
+
+    state = AgentState(
+        user_input="Rischia default Rossi SRL?",
+        route="case_a",
+        prediction_results=[
+            {
+                "company_id": 1,
+                "probability": 0.12,
+                "predicted_class": 0,
+                "explanation": {},
+            }
+        ],
+        final_answer="Rossi SRL has a low default risk.",
+    )
+    result = judge_node(state)
+
+    assert result["judge_verdict"]["approved"] is True
+    assert "unverified" in result["judge_verdict"]["reason"]

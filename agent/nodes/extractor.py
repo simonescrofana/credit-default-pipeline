@@ -27,6 +27,7 @@ import logging
 import pandas as pd
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from agent.models.llm_responder import get_responder_llm
@@ -35,18 +36,26 @@ from agent.prompts.extractor_prompt import (
     CASE_B_EXTRACTION_PROMPT,
 )
 from agent.state import AgentState
+from agent.utils.llm_utils import invoke_with_retry
 from database.connection import get_db
 from schemas.agent.extraction_validation import CompanyIdentifiers, ExtractedCompanyData
 from schemas.ml.insolvency_prediction import InsolvencyPredictionRequest
 
 logger = logging.getLogger(__name__)
 
-RESOLVE_COMPANY_ID_QUERY = """
+# Wrapped in text() explicitly: a raw string with named (:name) parameters
+# passed to pd.read_sql is not reliably translated to the driver's own
+# paramstyle (e.g. psycopg2's %(name)s) unless SQLAlchemy's text() marks it
+# as a parameterized statement to interpret, rather than a literal string
+# to pass through almost as-is.
+RESOLVE_COMPANY_ID_QUERY = text(
+    """
     SELECT company_id
     FROM public_marts.dim_companies
     WHERE legal_name = :identifier OR vat_number = :identifier
     LIMIT 1
-"""
+    """
+)
 
 
 def extract_case_a(state: AgentState) -> dict:
@@ -137,7 +146,7 @@ def extract_case_b(state: AgentState) -> dict:
     ]
 
     logger.info("Extracting ad hoc company data...")
-    extracted: ExtractedCompanyData = structured_llm.invoke(messages)
+    extracted: ExtractedCompanyData = invoke_with_retry(structured_llm, messages)
     raw_data = extracted.model_dump(exclude_none=True)
 
     errors: list[str] = list(state.prediction_errors)

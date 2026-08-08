@@ -7,6 +7,10 @@ The loop ends when the user types an exit command, or on Ctrl+c.
 
 """
 
+import logging
+import os
+os.environ["ORT_LOGGING_LEVEL"] = "3"  # 3 = ERROR, silenzia WARNING e INFO
+
 from agent.graph import build_agent
 
 EXIT_COMMANDS = {"quit", "exit", "esci"}
@@ -25,6 +29,9 @@ EXIT_HINT = (
     "(Type 'quit', 'exit', or 'esci' to end the chat / "
     "Scrivi 'quit', 'exit' o 'esci' per uscire dalla chat)"
 )
+
+# hides a log in the chat with the AI agent
+logging.getLogger("agent.utils.llm_utils").setLevel(logging.ERROR)
 
 
 def run_agent() -> None:

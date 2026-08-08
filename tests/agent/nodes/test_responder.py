@@ -24,9 +24,11 @@ def test_responder_node_case_a_happy_path(mock_get_responder_llm) -> None:
     state = AgentState(
         user_input="Rischia default Rossi SRL?",
         route="case_a",
+        company_identifiers=["Rossi SRL"],
         prediction_results=[
             {
                 "company_id": 1,
+                "company_name": "Rossi SRL",
                 "probability": 0.12,
                 "predicted_class": 0,
                 "explanation": {},
@@ -38,6 +40,8 @@ def test_responder_node_case_a_happy_path(mock_get_responder_llm) -> None:
     assert result == {"final_answer": "Rossi SRL has a low default risk."}
     sent_messages = mock_llm.invoke.call_args.args[0]
     user_message = sent_messages[1].content
+    assert "<company_identifiers>" in user_message
+    assert '"Rossi SRL"' in user_message
     assert "<prediction_results>" in user_message
     assert '"probability":0.12' in user_message
     assert "Rischia default Rossi SRL?" in user_message

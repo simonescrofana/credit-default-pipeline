@@ -11,14 +11,17 @@ loaded run, never a caller-supplied value.
 
 """
 
+import datetime
 import logging
 from typing import NamedTuple
 
 import pandas as pd
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ml.dataset.loader import QUERY
 from ml.dataset.preprocessing import handle_missing_and_encode, scale_features
+from ml.dataset.split import TARGET_COLUMN
 from ml.evaluation.explainability import explain_prediction
 from ml.inference.model_loader import LoadedModel
 from schemas.ml.insolvency_prediction import InsolvencyPredictionRequest
@@ -30,7 +33,11 @@ class PredictionResult(NamedTuple):
     """Represent the outcome of a single company's insolvency prediction.
 
     Attributes:
-        company_id (int): The identifier of the scored company.
+        company_id (int | None): The identifier of the scored company, or
+            `None` for ad hoc data not present in the database (case_b).
+        company_name (str | None): The company's canonical legal name from
+            the database, or `None` for ad hoc data (case_b), which has no
+            database record to draw a canonical name from.
         probability (float): The predicted probability of insolvency.
         predicted_class (int): The binary prediction (0 or 1), obtained by
             applying the decision threshold to `probability`.
@@ -40,7 +47,8 @@ class PredictionResult(NamedTuple):
 
     """
 
-    company_id: int
+    company_id: int | None
+    company_name: str | None
     probability: float
     predicted_class: int
     explanation: dict
@@ -60,21 +68,39 @@ def retrieve_company_data(session: Session, company_id: int) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: A single-row DataFrame indexed by `legal_name`, with
-            `company_id` and `snapshot_date` dropped as they are not model
-            features.
+            `company_id`, `snapshot_date`, and the target column dropped,
+            as none of them are model features.
 
     """
-    query = f"""
+    query = text(
+        f"""
         WITH dataset AS ({QUERY})
         SELECT * FROM dataset
         WHERE company_id = :company_id
         ORDER BY snapshot_date DESC
         LIMIT 1
-    """
+        """
+    )
+    # Wrapped in text() explicitly: a raw string with named (:name) parameters
+    # passed to pd.read_sql is not reliably translated to the driver's own
+    # paramstyle (e.g. psycopg2's %(name)s) unless SQLAlchemy's text() marks
+    # it as a parameterized statement to interpret, rather than a literal
+    # string to pass through almost as-is.
     df = pd.read_sql(query, con=session.bind, params={"company_id": company_id})
 
     df = df.set_index("legal_name")
-    df = df.drop(columns=["company_id", "snapshot_date"])
+    df = df.drop(columns=["company_id", "snapshot_date", TARGET_COLUMN])
+
+    # A single-row result from pd.read_sql can leave a column with a NULL
+    # value as dtype=object rather than float64 (pandas cannot always infer
+    # a clean numeric dtype from one row); cast explicitly, same as
+    # predict_from_raw_data does for its own single-row DataFrame.
+    numeric_cols = [
+        col
+        for col in df.columns
+        if col not in ("industry_sector", "registered_office_region")
+    ]
+    df[numeric_cols] = df[numeric_cols].astype("float64")
 
     return df
 
@@ -107,10 +133,20 @@ def score_features(
             explanation)`.
 
     """
-    features, _ = handle_missing_and_encode(raw_features, encoder=loaded_model.encoder)
+    features, _ = handle_missing_and_encode(
+        raw_features, encoder=loaded_model.encoder, handle_nan=False
+    )
 
     if loaded_model.scaler is not None:
         features, _ = scale_features(features, scaler=loaded_model.scaler)
+
+    # XGBoost's inplace_predict validates column order, not just column
+    # names — reorder to match the order the model was trained on (which
+    # this project's own feature-construction order does not guarantee,
+    # e.g. case_b's hand-written dict groups columns conceptually rather
+    # than in training order) rather than relying on callers to get it
+    # right themselves.
+    features = features[loaded_model.model.feature_names_in_]
 
     probability = loaded_model.model.predict_proba(features)[0, 1]
     predicted_class = int(probability >= loaded_model.threshold)
@@ -149,6 +185,7 @@ def predict(
     """
     logger.info("Retrieving latest snapshot for company_id=%d...", company_id)
     company_df = retrieve_company_data(session, company_id)
+    company_name = str(company_df.index[0])
 
     probability, predicted_class, explanation = score_features(
         company_df,
@@ -164,6 +201,7 @@ def predict(
 
     return PredictionResult(
         company_id=company_id,
+        company_name=company_name,
         probability=float(probability),
         predicted_class=predicted_class,
         explanation=explanation,
@@ -201,6 +239,9 @@ def predict_from_raw_data(
     """
     logger.info("Scoring ad hoc company data (no company_id)...")
 
+    now = datetime.datetime.now()
+
+
     raw_features = pd.DataFrame(
         [
             {
@@ -220,6 +261,14 @@ def predict_from_raw_data(
                 "average_satisfaction_score": request.average_satisfaction_score,
                 "billing_disputes_count": request.billing_disputes_count,
                 "active_contracts_count": request.active_contracts_count,
+                # Derived server-side from the moment of the request, never
+                # accepted from the caller — these represent the scoring
+                # snapshot's period, the same role they play in training
+                # (derived from snapshot_date there), not the company's
+                # foundation date.
+                "year": now.year,
+                "quarter": (now.month - 1) // 3 + 1,
+                "month": now.month,
             }
         ]
     )
@@ -243,6 +292,7 @@ def predict_from_raw_data(
 
     return PredictionResult(
         company_id=None,
+        company_name=None,
         probability=probability,
         predicted_class=predicted_class,
         explanation=explanation,
