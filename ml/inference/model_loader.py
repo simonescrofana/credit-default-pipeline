@@ -34,6 +34,9 @@ class LoadedModel(NamedTuple):
         explainer (shap.TreeExplainer): A SHAP TreeExplainer built once from
             the loaded model, ready to be reused across any number of
             predictions.
+        threshold (float): The classification threshold selected for this
+            run, logged as the `selected_threshold` MLflow param (see
+            `evaluation/plots.ipynb`, F2-optimal on aggregated CV folds).
 
     """
 
@@ -41,6 +44,7 @@ class LoadedModel(NamedTuple):
     encoder: OneHotEncoder
     scaler: StandardScaler | None
     explainer: shap.TreeExplainer
+    threshold: float
 
 
 def load_model(
@@ -90,6 +94,7 @@ def load_model(
     encoder = mlflow.sklearn.load_model(f"runs:/{run_id}/encoder")
 
     client = MlflowClient()
+    run = client.get_run(run_id)
     artifact_names = {artifact.path for artifact in client.list_artifacts(run_id)}
 
     scaler = None
@@ -98,7 +103,15 @@ def load_model(
     else:
         logger.info("No scaler artifact found for run '%s' (scale=False).", run_id)
 
+    threshold = float(run.data.params["selected_threshold"])
+
     explainer = build_explainer(model)
 
     logger.info("Model artifacts and SHAP explainer loaded successfully.")
-    return LoadedModel(model=model, encoder=encoder, scaler=scaler, explainer=explainer)
+    return LoadedModel(
+        model=model,
+        encoder=encoder,
+        scaler=scaler,
+        explainer=explainer,
+        threshold=threshold,
+    )

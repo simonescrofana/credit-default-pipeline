@@ -12,7 +12,7 @@ import datetime
 import pytest
 from pydantic import ValidationError
 
-from schemas.insolvency_prediction import InsolvencyPredictionRequest
+from schemas.ml.insolvency_prediction import InsolvencyPredictionRequest
 
 VALID_REQUIRED_ONLY = {
     "foundation_date": datetime.date(2015, 3, 1),

@@ -5,6 +5,8 @@ module manages validation rules for environment variables required by the
 application, specifically orchestrating service configurations for:
     * PostgreSQL (database connectivity)
     * Logfire (telemetry and observability)
+    * MLflow (experiment tracking and model registry)
+    * Groq (LLM inference for the agentic layer)
 
 """
 
@@ -22,8 +24,9 @@ class Settings(BaseSettings):
 
     Orchestrates the loading and validation of environment variables via `.env`
     files. This class serves as the central source of truth for service
-    configurations, including PostgreSQL connection parameters and Logfire
-    telemetry credentials.
+    configurations, including PostgreSQL connection parameters, Logfire
+    telemetry credentials, the MLflow tracking URI and the Groq API key
+    used by the agentic layer.
 
     """
 
@@ -56,6 +59,9 @@ class Settings(BaseSettings):
             description="MLflow tracking backend URI (SQLite for local development)."
         ),
     ] = "sqlite:///mlflow.db"
+
+    # GROQ
+    GROQ_API_KEY: SecretPassword
 
     @computed_field
     @property

@@ -58,5 +58,6 @@ jobs:
         POSTGRES_PASSWORD: postgres_password
         POSTGRES_DB: postgres_db
         LOGFIRE_TOKEN: "${{ secrets.LOGFIRE_TOKEN }}"
+        GROQ_API_KEY: "${{ secrets.GROQ_API_KEY }}"
       run: |
         uv run pytest --cov=. --cov-report=term-missing --cov-fail-under=95

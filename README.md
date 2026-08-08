@@ -12,7 +12,7 @@ This project is actively developed to simulate an enterprise-grade AI infrastruc
 * **[x] Phase 2:** OLTP Core Banking Database Setup & Schema Design (SQLAlchemy ORM + Alembic Migrations).
 * **[x] Phase 3:** MLOps Data Versioning (DVC Data Tracking) & OLAP Warehouse Transformation (dbt Core, Star Schema).
 * **[x] Phase 4:** Machine Learning Benchmark Suite (Sklearn, XGBoost, PyTorch) & Experiment Tracking (MLflow).
-* **[ ] Phase 5:** Explainable AI (SHAP) Integration & Agentic GenAI Layer (LangGraph + ChromaDB).
+* **[x] Phase 5:** Explainable AI (SHAP) Integration & Agentic GenAI Layer (LangGraph + ChromaDB).
 * **[ ] Phase 6:** Production Exposure (FastAPI App) & Live Monitoring/Observability UI (Streamlit + Pydantic + Logfire).
 
 ---
@@ -29,8 +29,51 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 6. **Application & Serving Layer:** A FastAPI backend exposing validated REST endpoints for predictions and chat interactions, paired with a Streamlit interface acting as a live, interactive demo of the full pipeline.
 
 ---
+
+## 🤖 Agent Graph
+
+The Generative AI layer is built as an explicit LangGraph state machine. A router node classifies every incoming request into one of four routes; all four converge on a shared LLM response node. The two prediction routes (existing or ad hoc company) both pass through a shared extraction and prediction step first. A generic, unrouted question skips validation entirely and returns directly; every other response is checked by an LLM-as-a-Judge node, which can send it back to be regenerated up to a fixed retry cap, past which a static fallback message is returned instead:
+
+```mermaid
+graph TD
+    START([User Prompt]) --> ROUTER{Router}
+
+    ROUTER -->|Prediction for existing company| EXTRACTOR_A[Extractor<br/>Case A]
+    ROUTER -->|Prediction from ad hoc data| EXTRACTOR_B[Extractor<br/>Case B]
+    ROUTER -->|Documentation/project question| RAG[RAG Node]
+    ROUTER -->|Generic question| RISPOSTA[LLM Response Node]
+
+    EXTRACTOR_A --> PREDICTOR[Predictor Node]
+    EXTRACTOR_B --> PREDICTOR
+    PREDICTOR --> RISPOSTA
+    RAG --> RISPOSTA
+
+    RISPOSTA -->|Generic question| END([Final Response])
+    RISPOSTA -->|Everything else| JUDGE{LLM-as-a-Judge}
+    JUDGE -->|Approve| END
+    JUDGE -->|Reject, under retry cap| RISPOSTA
+    JUDGE -->|Reject, retry cap reached| FALLBACK[Fixed Fallback Message]
+    FALLBACK --> END
+```
+
+---
+
+## 💬 Try the Agent
+
+Ready-to-use example prompts for every route the agent handles — no need to guess a valid ad hoc company profile or which companies exist in the database — are available under [`docs/prompts/`](docs/prompts/), in both Italian and English. Run the agent with:
+
+```bash
+uv run python -m agent.run_agent
+```
+
+---
  
 ## 🧠 Architectural Decisions & Rationale
+
+
+#### Modern Python Tooling (`uv` + Ruff)
+* **Choice:** Moving away from standard `pip`/`venv` and selecting `uv` as the exclusive dependency manager alongside Ruff for quality gating.
+* **Justification:** `uv` provides blazing-fast environment synchronization and strict, deterministic lockfile management, eliminating the "it works on my machine" anti-pattern in production containers. Ruff guarantees lightning-fast code linting and formatting compliance natively during pre-commit and CI stages.
  
 #### Complete Isolation of OLTP and OLAP Store
 * **Choice:** Running an analytical dbt layer over isolated analytical tables instead of running feature engineering queries straight against live application tables.
@@ -76,9 +119,50 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 * **Choice:** XGBoost is the only model family explained via SHAP (`ml/evaluation/explainability.py`, built on `TreeExplainer`), since only the best-performing model is ever deployed, and prior benchmarking already pointed to XGBoost, investing explainability effort in the baseline or MLP would not translate into production value. That same SHAP analysis (see the beeswarm plot in `ml/evaluation/plots.ipynb`) directly drives which fields are required versus optional in the `InsolvencyPredictionRequest` Pydantic schema used to validate ad hoc predictions for companies not yet in the database: the two dominant features (`unpaid_ratio_trailing_90d`, `total_outstanding_debt`) are mandatory, while the rest are optional and left as NaN when omitted.
 * **Justification:** This ties the validation layer's strictness to actual, measured feature importance rather than an arbitrary judgment call about which fields "feel" necessary, and lets XGBoost's native missing-value handling (the model is trained with `handle_nan=False`) degrade gracefully on the fields it relies on least.
 
-#### Modern Python Tooling (`uv` + Ruff)
-* **Choice:** Moving away from standard `pip`/`venv` and selecting `uv` as the exclusive dependency manager alongside Ruff for quality gating.
-* **Justification:** `uv` provides blazing-fast environment synchronization and strict, deterministic lockfile management, eliminating the "it works on my machine" anti-pattern in production containers. Ruff guarantees lightning-fast code linting and formatting compliance natively during pre-commit and CI stages.
+#### Router-First Agent Design
+* **Choice:** The agent's graph classifies every incoming request into one of four explicit routes (`case_a`, `case_b`, `rag`, `direct`) before any downstream node runs. The alternative considered was invoking retrieval unconditionally on every request and relying on a low similarity score to fall back to a direct answer when nothing relevant came back.
+* **Justification:** Retrieval is not free: every ChromaDB query adds latency and risks injecting irrelevant context into the prompt for requests that don't need it (e.g. a greeting or an out-of-scope question). An explicit router keeps each path in the graph doing only the work it actually needs, at the cost of depending on the router's own classification accuracy.
+
+#### Single Source of Truth for the Agent's Routing Type
+* **Choice:** The `Literal` of valid routes is defined once, as `AgentRoute` in `schemas/agent/types.py`, and reused both by `RouterDecision` (the schema constraining the router LLM's structured output) and by `AgentState.route` (the graph's own state). The router's LLM output is validated against `RouterDecision` alone rather than the full `AgentState`, keeping the model's output surface limited to the one field it is actually responsible for producing.
+* **Justification:** The two schemas serve different purposes — one shapes what the LLM is allowed to return, the other is the graph's source of truth — but they must always agree on the same set of valid routes. Defining that set once and importing it in both places removes the possibility of the two drifting out of sync if a new route is ever added.
+
+#### Groq as the LLM Hosting Provider (`openai/gpt-oss-120b`)
+* **Choice:** The agent's LLM calls are served via Groq, currently using `openai/gpt-oss-120b`, rather than a locally self-hosted open-weight model.
+* **Justification:** The project's local hardware is CPU-only, ruling out running a model of this size directly. Groq offers a genuinely free tier (no credit card required) with low-latency inference over open-weight models, making it a better fit than a smaller, locally runnable model that would trade off response quality.
+
+#### Extraction, Not Query or Feature Generation
+* **Choice:** The extractor node never lets the LLM produce SQL or a ready-to-use feature DataFrame. For case_a, the LLM only extracts free-text company identifiers (legal name or VAT number) via structured output; resolving an identifier into a `company_id` is done by a parameterized, code-written query, never a query the model itself constructs. For case_b, the LLM extracts data into a deliberately permissive intermediate schema, every field optional and unconstrained, which is then validated for real against `InsolvencyPredictionRequest`; a validation failure is recorded rather than raised, so the responder node can explain to the user what is missing or invalid.
+* **Justification:** Letting an LLM generate SQL from free text opens the door to injection-shaped risk that has nothing to do with a malicious user, an LLM producing a malformed or unsafe query is enough. Separating "what did the user say" (the LLM's job) from "is it enough, and is it valid" (`InsolvencyPredictionRequest`'s job) also prevents an LLM extraction quirk, such as defaulting an unstated qualitative claim ("heavily indebted") to an invented number, from silently masquerading as real user-supplied data feeding a financial prediction model.
+
+#### Single Source of Truth for the Decision Threshold
+* **Choice:** `predict` and `predict_from_raw_data` no longer accept a `threshold` parameter from the caller; both always score against `loaded_model.threshold`, read directly from the `selected_threshold` MLflow param logged on the final training run (see `evaluation/plots.ipynb`) when the model bundle is loaded.
+* **Justification:** With `threshold` as a separate caller-supplied argument, nothing prevented a prediction from being scored against a threshold inconsistent with the one the model was actually tuned against. Centralizing it inside the loaded model bundle removes that possibility entirely, at the cost of `load_model` failing fast if a run has no threshold logged, a deliberate trade-off, given a run without one isn't ready to serve predictions in the first place.
+
+
+#### Documentation Extraction via AST/YAML, Never Import
+* **Choice:** `extract_docs.py` reads every Python docstring and dbt model/column description directly from source text (`ast` for `.py` files, `yaml` for `schema.yml`), rather than importing project modules to read `__doc__` via `inspect`.
+* **Justification:** Several modules open real side effects at import time (e.g. a database connection) or pull in heavy dependencies (PyTorch, XGBoost) not needed just to read a docstring; parsing source text avoids triggering any of that.
+
+#### Idempotent RAG Ingestion
+* **Choice:** `ingest.py` deletes and recreates the ChromaDB collection on every run, rather than only upserting new chunks into it.
+* **Justification:** `upsert` alone would leave a chunk orphaned in the index forever once its source (a deleted README section, a removed docstring) disappears. Starting from a clean collection each time means re-running ingestion after any documentation change is always safe, with no manual cleanup step.
+
+#### Format-Matched Context Injection in the Responder
+* **Choice:** The responder node formats the material it injects into the prompt differently depending on its shape, not uniformly as plain text: prediction results/errors (case_a, case_b) are minimal JSON wrapped in an XML-style tag, while retrieved context (rag) is plain text in its own tag.
+* **Justification:** Prediction results are multi-field numeric records the model must cite precisely without mixing up figures across companies or fields, exactly the case where a keyed format outperforms prose; retrieved context is prose the model should synthesize freely, where a keyed format would only add syntactic noise. Prompt format affects an LLM's reasoning mode, not just output structure, so the format is chosen per material rather than fixed for the whole prompt.
+
+#### Retry on a Known Groq/gpt-oss Flakiness
+* **Choice:** `agent/utils/llm_utils.py`'s `invoke_with_retry` retries a structured-output LLM call when Groq returns `tool_use_failed` (`openai/gpt-oss-*` intermittently responding with plain text instead of the required tool call under `tool_choice="required"`), rather than letting it crash the graph. The judge node uses a higher retry cap than the router/extractor, given its longer, denser prompts; if every attempt is still exhausted, the response is treated as approved by default (logged as a warning) rather than surfacing a raw error to the user.
+* **Justification:** This failure is documented independently across Groq's own community forum and the LangChain/pydantic-ai issue trackers as a provider/model-level flakiness, not a sign of a malformed prompt or schema, so a short retry resolves it in practice. Defaulting to approved on total exhaustion, rather than failing the whole request, reflects that the user has otherwise already received a valid response from the responder in every case observed, an unverifiable verdict is a worse outcome for them than an unverified one.
+
+#### Feature Order and Presence Validated Against the Model Itself
+* **Choice:** `score_features` reorders the scored DataFrame's columns to `loaded_model.model.feature_names_in_` before calling `predict_proba`, instead of relying on `retrieve_company_data`'s query or `predict_from_raw_data`'s hand-written dict to already match the order used in training.
+* **Justification:** XGBoost's `inplace_predict` validates column order, not just column names, and neither entry point's own construction order was guaranteed to match it — reading the order from the model itself removes that assumption entirely. Exercising the pipeline against the real database and model (rather than only mocked tests) surfaced two related gaps fixed the same way: `retrieve_company_data` was including the target column (`is_insolvent`) among the model's input features, and `predict_from_raw_data` never derived `year`/`quarter`/`month` at all, despite them being required training features.
+
+#### Canonical Company Name Propagated Through Predictions
+* **Choice:** `predict` reads the company's canonical `legal_name` from the scored DataFrame's index and includes it in `PredictionResult` as `company_name` (`None` for case_b, which has no database record to draw one from). The responder's prompt material also includes a `company_identifiers` block with the user's original free-text wording.
+* **Justification:** Without this, the responder had only an opaque `company_id` to work with and no textual link back to the name the user actually asked about — a gap invisible in isolated testing but immediately apparent the first time a real request paraphrased a company's name rather than repeating it verbatim.
 
 ---
 
@@ -107,7 +191,7 @@ XGBoost is the strongest model on every metric except recall, where the MLP reac
 * **MLOps & Model Tracking:** MLflow
 * **QA & Enterprise Validation:** Pytest, Pydantic Validation
 * **Observability & Logging:** Pydantic Logfire, Ruff
-* **Generative AI Infrastructure:** LangGraph, ChromaDB
+* **Generative AI Infrastructure:** LangGraph, ChromaDB, Groq
 * **Application Layer & UI:** FastAPI, Streamlit
 
 ---
@@ -124,6 +208,36 @@ insolvency_prediction_project/
 │   │   └── main.yml
 │   └── pull_request_template.md
 ├── agent/
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── llm_judge.py
+│   │   └── llm_responder.py
+│   ├── nodes/
+│   │   ├── __init__.py
+│   │   ├── extractor.py
+│   │   ├── judge.py
+│   │   ├── predictor_node.py
+│   │   ├── responder.py
+│   │   ├── retriever_node.py
+│   │   └── router.py
+│   ├── prompts/
+│   │   ├── __init__.py
+│   │   ├── extractor_prompt.py
+│   │   ├── judge_prompt.py
+│   │   ├── responder_prompt.py
+│   │   └── router_prompt.py
+│   ├── rag/
+│   │   ├── __init__.py
+│   │   ├── extract_docs.py
+│   │   ├── ingest.py
+│   │   └── retrieval.py
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── llm_utils.py
+│   ├── __init__.py
+│   ├── graph.py
+│   ├── run_agent.py
+│   └── state.py
 ├── analytics/
 │   ├── dbt_project/
 │   │   ├── analyses
@@ -237,6 +351,19 @@ insolvency_prediction_project/
 │   │   ├── credit-default-DFM.pdf
 │   │   ├── credit-default-star-schema.pdf
 │   │   └── dag-dbt.jpg
+│   ├── prompts/
+│   │   ├── case_a/
+│   │   │   ├── case_a_en.md
+│   │   │   └── case_a_it.md
+│   │   ├── case_b/
+│   │   │   ├── case_b_en.md
+│   │   │   └── case_b_it.md
+│   │   ├── direct/
+│   │   │   ├── direct_en.md
+│   │   │   └── direct_it.md
+│   │   └── rag/
+│   │       ├── rag_en.md
+│   │       └── rag_it.md
 │   └── schema/
 │       ├── credit-default-DFM.sql
 │       ├── credit-default-star-schema.sql
@@ -280,16 +407,50 @@ insolvency_prediction_project/
 │   ├── __init__.py
 │   └── run_training.py
 ├── schemas/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── insolvency_prediction.py
-│   ├── models_validation.py
-│   └── types.py
+│   ├── agent/
+│   │   ├── __init__.py
+│   │   ├── extraction_validation.py
+│   │   ├── judge_validation.py
+│   │   ├── route_validation.py
+│   │   └── types.py
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── models_validation.py
+│   │   └── types.py
+│   ├── ml/
+│   │   ├── __init__.py
+│   │   └── insolvency_prediction.py
+│   └── __init__.py
 ├── simulation/
 │   ├── __init__.py
 │   ├── profiles.py
 │   └── seed.py
 ├── tests/
+│   ├── agent/
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_llm_judge.py
+│   │   │   └── test_llm_responder.py
+│   │   ├── nodes/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_extractor.py
+│   │   │   ├── test_judge.py
+│   │   │   ├── test_predictor_node.py
+│   │   │   ├── test_responder.py
+│   │   │   ├── test_retriever_node.py
+│   │   │   └── test_router.py
+│   │   ├── rag/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_extract_docs.py
+│   │   │   ├── test_ingest.py
+│   │   │   └── test_retrieval.py
+│   │   ├── utils
+│   │   │   ├── __init__.py
+│   │   │   └── test_llm_utils.py
+│   │   ├── __init__.py
+│   │   ├── test_graph.py
+│   │   └── test_run_agent.py
 │   ├── analytics/
 │   │   ├── ingestion/
 │   │   │   ├── __init__.py
@@ -324,9 +485,13 @@ insolvency_prediction_project/
 │   │   ├── __init__.py
 │   │   └── test_run_training.py
 │   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── test_insolvency_prediction.py
-│   │   └── test_models_validation.py
+│   │   ├── database/
+│   │   │   ├── __init__.py
+│   │   │   └── test_models_validation.py
+│   │   ├── ml/
+│   │   │   ├── __init__.py
+│   │   │   └── test_insolvency_prediction.py
+│   │   └── __init__.py
 │   ├── simulation/
 │   │   ├── __init__.py
 │   │   └── test_seed.py

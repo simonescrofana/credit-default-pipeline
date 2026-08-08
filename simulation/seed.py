@@ -28,8 +28,8 @@ from database.models import (
     Payment,
     UserWebLogin,
 )
-from schemas.base import BaseResponseSchema
-from schemas.models_validation import (
+from schemas.database.base import BaseResponseSchema
+from schemas.database.models_validation import (
     CompanyCreate,
     CRMSupportTicketCreate,
     EnergyContractCreate,

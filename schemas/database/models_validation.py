@@ -21,8 +21,8 @@ from typing import Optional, Self
 
 from pydantic import field_validator, model_validator
 
-from schemas.base import BaseResponseSchema
-from schemas.types import (
+from schemas.database.base import BaseResponseSchema
+from schemas.database.types import (
     CommodityType,
     CompanyId,
     ContractActivationDate,
