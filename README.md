@@ -12,7 +12,7 @@ This project is actively developed to simulate an enterprise-grade AI infrastruc
 * **[x] Phase 2:** OLTP Core Banking Database Setup & Schema Design (SQLAlchemy ORM + Alembic Migrations).
 * **[x] Phase 3:** MLOps Data Versioning (DVC Data Tracking) & OLAP Warehouse Transformation (dbt Core, Star Schema).
 * **[x] Phase 4:** Machine Learning Benchmark Suite (Sklearn, XGBoost, PyTorch) & Experiment Tracking (MLflow).
-* **[ ] Phase 5:** Explainable AI (SHAP) Integration & Agentic GenAI Layer (LangGraph + ChromaDB).
+* **[x] Phase 5:** Explainable AI (SHAP) Integration & Agentic GenAI Layer (LangGraph + ChromaDB).
 * **[ ] Phase 6:** Production Exposure (FastAPI App) & Live Monitoring/Observability UI (Streamlit + Pydantic + Logfire).
 
 ---
@@ -31,27 +31,41 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 ---
 
 ## 🤖 Agent Graph
- 
-The Generative AI layer is built as an explicit LangGraph state machine. A router node classifies every incoming request into one of four routes; three of them converge on a shared LLM response node, which is itself validated by an LLM-as-a-Judge node before the response is returned to the user:
- 
+
+The Generative AI layer is built as an explicit LangGraph state machine. A router node classifies every incoming request into one of four routes; all four converge on a shared LLM response node. The two prediction routes (existing or ad hoc company) both pass through a shared extraction and prediction step first. A generic, unrouted question skips validation entirely and returns directly; every other response is checked by an LLM-as-a-Judge node, which can send it back to be regenerated up to a fixed retry cap, past which a static fallback message is returned instead:
+
 ```mermaid
 graph TD
     START([User Prompt]) --> ROUTER{Router}
- 
-    ROUTER -->|Prediction for existing company| CASOA[Prediction Node<br/>Case A]
-    ROUTER -->|Prediction from ad hoc data| CASOB[Prediction Node<br/>Case B]
+
+    ROUTER -->|Prediction for existing company| EXTRACTOR_A[Extractor<br/>Case A]
+    ROUTER -->|Prediction from ad hoc data| EXTRACTOR_B[Extractor<br/>Case B]
     ROUTER -->|Documentation/project question| RAG[RAG Node]
     ROUTER -->|Generic question| RISPOSTA[LLM Response Node]
- 
-    CASOA --> RISPOSTA
-    CASOB --> RISPOSTA
+
+    EXTRACTOR_A --> PREDICTOR[Predictor Node]
+    EXTRACTOR_B --> PREDICTOR
+    PREDICTOR --> RISPOSTA
     RAG --> RISPOSTA
- 
-    RISPOSTA --> JUDGE{LLM-as-a-Judge}
-    JUDGE -->|Reject: regenerate| RISPOSTA
-    JUDGE -->|Approve| END([Final Response])
+
+    RISPOSTA -->|Generic question| END([Final Response])
+    RISPOSTA -->|Everything else| JUDGE{LLM-as-a-Judge}
+    JUDGE -->|Approve| END
+    JUDGE -->|Reject, under retry cap| RISPOSTA
+    JUDGE -->|Reject, retry cap reached| FALLBACK[Fixed Fallback Message]
+    FALLBACK --> END
 ```
- 
+
+---
+
+## 💬 Try the Agent
+
+Ready-to-use example prompts for every route the agent handles — no need to guess a valid ad hoc company profile or which companies exist in the database — are available under [`docs/prompts/`](docs/prompts/), in both Italian and English. Run the agent with:
+
+```bash
+uv run python -m agent.run_agent
+```
+
 ---
  
 ## 🧠 Architectural Decisions & Rationale
@@ -113,8 +127,8 @@ graph TD
 * **Choice:** The `Literal` of valid routes is defined once, as `AgentRoute` in `schemas/agent/types.py`, and reused both by `RouterDecision` (the schema constraining the router LLM's structured output) and by `AgentState.route` (the graph's own state). The router's LLM output is validated against `RouterDecision` alone rather than the full `AgentState`, keeping the model's output surface limited to the one field it is actually responsible for producing.
 * **Justification:** The two schemas serve different purposes — one shapes what the LLM is allowed to return, the other is the graph's source of truth — but they must always agree on the same set of valid routes. Defining that set once and importing it in both places removes the possibility of the two drifting out of sync if a new route is ever added.
 
-#### Groq as the LLM Hosting Provider (`llama-3.3-70b-versatile`)
-* **Choice:** The agent's LLM calls are served via Groq, currently using `llama-3.3-70b-versatile`, rather than a locally self-hosted open-weight model.
+#### Groq as the LLM Hosting Provider (`openai/gpt-oss-120b`)
+* **Choice:** The agent's LLM calls are served via Groq, currently using `openai/gpt-oss-120b`, rather than a locally self-hosted open-weight model.
 * **Justification:** The project's local hardware is CPU-only, ruling out running a model of this size directly. Groq offers a genuinely free tier (no credit card required) with low-latency inference over open-weight models, making it a better fit than a smaller, locally runnable model that would trade off response quality.
 
 #### Extraction, Not Query or Feature Generation
@@ -137,6 +151,18 @@ graph TD
 #### Format-Matched Context Injection in the Responder
 * **Choice:** The responder node formats the material it injects into the prompt differently depending on its shape, not uniformly as plain text: prediction results/errors (case_a, case_b) are minimal JSON wrapped in an XML-style tag, while retrieved context (rag) is plain text in its own tag.
 * **Justification:** Prediction results are multi-field numeric records the model must cite precisely without mixing up figures across companies or fields, exactly the case where a keyed format outperforms prose; retrieved context is prose the model should synthesize freely, where a keyed format would only add syntactic noise. Prompt format affects an LLM's reasoning mode, not just output structure, so the format is chosen per material rather than fixed for the whole prompt.
+
+#### Retry on a Known Groq/gpt-oss Flakiness
+* **Choice:** `agent/utils/llm_utils.py`'s `invoke_with_retry` retries a structured-output LLM call when Groq returns `tool_use_failed` (`openai/gpt-oss-*` intermittently responding with plain text instead of the required tool call under `tool_choice="required"`), rather than letting it crash the graph. The judge node uses a higher retry cap than the router/extractor, given its longer, denser prompts; if every attempt is still exhausted, the response is treated as approved by default (logged as a warning) rather than surfacing a raw error to the user.
+* **Justification:** This failure is documented independently across Groq's own community forum and the LangChain/pydantic-ai issue trackers as a provider/model-level flakiness, not a sign of a malformed prompt or schema, so a short retry resolves it in practice. Defaulting to approved on total exhaustion, rather than failing the whole request, reflects that the user has otherwise already received a valid response from the responder in every case observed, an unverifiable verdict is a worse outcome for them than an unverified one.
+
+#### Feature Order and Presence Validated Against the Model Itself
+* **Choice:** `score_features` reorders the scored DataFrame's columns to `loaded_model.model.feature_names_in_` before calling `predict_proba`, instead of relying on `retrieve_company_data`'s query or `predict_from_raw_data`'s hand-written dict to already match the order used in training.
+* **Justification:** XGBoost's `inplace_predict` validates column order, not just column names, and neither entry point's own construction order was guaranteed to match it — reading the order from the model itself removes that assumption entirely. Exercising the pipeline against the real database and model (rather than only mocked tests) surfaced two related gaps fixed the same way: `retrieve_company_data` was including the target column (`is_insolvent`) among the model's input features, and `predict_from_raw_data` never derived `year`/`quarter`/`month` at all, despite them being required training features.
+
+#### Canonical Company Name Propagated Through Predictions
+* **Choice:** `predict` reads the company's canonical `legal_name` from the scored DataFrame's index and includes it in `PredictionResult` as `company_name` (`None` for case_b, which has no database record to draw one from). The responder's prompt material also includes a `company_identifiers` block with the user's original free-text wording.
+* **Justification:** Without this, the responder had only an opaque `company_id` to work with and no textual link back to the name the user actually asked about — a gap invisible in isolated testing but immediately apparent the first time a real request paraphrased a company's name rather than repeating it verbatim.
 
 ---
 
@@ -184,6 +210,7 @@ insolvency_prediction_project/
 ├── agent/
 │   ├── models/
 │   │   ├── __init__.py
+│   │   ├── llm_judge.py
 │   │   └── llm_responder.py
 │   ├── nodes/
 │   │   ├── __init__.py
@@ -196,6 +223,7 @@ insolvency_prediction_project/
 │   ├── prompts/
 │   │   ├── __init__.py
 │   │   ├── extractor_prompt.py
+│   │   ├── judge_prompt.py
 │   │   ├── responder_prompt.py
 │   │   └── router_prompt.py
 │   ├── rag/
@@ -203,8 +231,12 @@ insolvency_prediction_project/
 │   │   ├── extract_docs.py
 │   │   ├── ingest.py
 │   │   └── retrieval.py
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── llm_utils.py
 │   ├── __init__.py
 │   ├── graph.py
+│   ├── run_agent.py
 │   └── state.py
 ├── analytics/
 │   ├── dbt_project/
@@ -319,6 +351,19 @@ insolvency_prediction_project/
 │   │   ├── credit-default-DFM.pdf
 │   │   ├── credit-default-star-schema.pdf
 │   │   └── dag-dbt.jpg
+│   ├── prompts/
+│   │   ├── case_a/
+│   │   │   ├── case_a_en.md
+│   │   │   └── case_a_it.md
+│   │   ├── case_b/
+│   │   │   ├── case_b_en.md
+│   │   │   └── case_b_it.md
+│   │   ├── direct/
+│   │   │   ├── direct_en.md
+│   │   │   └── direct_it.md
+│   │   └── rag/
+│   │       ├── rag_en.md
+│   │       └── rag_it.md
 │   └── schema/
 │       ├── credit-default-DFM.sql
 │       ├── credit-default-star-schema.sql
@@ -365,6 +410,7 @@ insolvency_prediction_project/
 │   ├── agent/
 │   │   ├── __init__.py
 │   │   ├── extraction_validation.py
+│   │   ├── judge_validation.py
 │   │   ├── route_validation.py
 │   │   └── types.py
 │   ├── database/
@@ -384,6 +430,7 @@ insolvency_prediction_project/
 │   ├── agent/
 │   │   ├── models/
 │   │   │   ├── __init__.py
+│   │   │   ├── test_llm_judge.py
 │   │   │   └── test_llm_responder.py
 │   │   ├── nodes/
 │   │   │   ├── __init__.py
@@ -391,14 +438,19 @@ insolvency_prediction_project/
 │   │   │   ├── test_judge.py
 │   │   │   ├── test_predictor_node.py
 │   │   │   ├── test_responder.py
-│   │   │   ├── test_retriever.py
+│   │   │   ├── test_retriever_node.py
 │   │   │   └── test_router.py
 │   │   ├── rag/
 │   │   │   ├── __init__.py
 │   │   │   ├── test_extract_docs.py
 │   │   │   ├── test_ingest.py
 │   │   │   └── test_retrieval.py
-│   │   └── __init__.py
+│   │   ├── utils
+│   │   │   ├── __init__.py
+│   │   │   └── test_llm_utils.py
+│   │   ├── __init__.py
+│   │   ├── test_graph.py
+│   │   └── test_run_agent.py
 │   ├── analytics/
 │   │   ├── ingestion/
 │   │   │   ├── __init__.py
