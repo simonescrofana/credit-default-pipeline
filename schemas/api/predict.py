@@ -1,14 +1,14 @@
 """Pydantic schemas for the /predict endpoints' request and response bodies.
 
-`PredictionResponse` is the shared response model for both `/predict` (ad
-hoc data, case_b) and `/predict/existing` (a company already in the
+`PredictionResponse` is the shared response model for both `/predict/ad-hoc`
+(ad hoc data, case_b) and `/predict/company` (a company already in the
 database, case_a): it mirrors `ml.inference.predictor.PredictionResult`
 field for field, except for the company id which should not be exposed,
 but as a Pydantic model rather than a `NamedTuple`, so FastAPI can generate
 response validation and OpenAPI documentation from it without coupling the
 API layer to the ML layer's internal return type.
 
-`ExistingCompanyRequest` is the request body for `/predict/existing`: a
+`ExistingCompanyRequest` is the request body for `/predict/company`: a
 single free-form identifier (legal name or VAT number), resolved
 server-side the same way `agent.nodes.extractor.extract_case_a` resolves
 it, via `utils.queries.RESOLVE_COMPANY_ID_QUERY`.
@@ -23,7 +23,7 @@ class PredictionResponse(BaseModel):
 
     Attributes:
         company_name (str | None): The company's canonical legal name from
-            the database, or `None` for ad hoc data (from `/predict`),
+            the database, or `None` for ad hoc data (from `/predict/ad-hoc`),
             which has no database record to draw a canonical name from.
         probability (float): The predicted probability of insolvency.
         predicted_class (int): The binary prediction (0 or 1), obtained by
