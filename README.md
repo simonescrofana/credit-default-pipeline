@@ -67,7 +67,53 @@ uv run python -m agent.run_agent
 ```
 
 ---
- 
+
+## 🚀 Try the API
+
+The same agent and model are also served over HTTP, alongside two direct, LLM-independent prediction endpoints. Start the server with:
+
+```bash
+uv run uvicorn api.main:app --reload
+```
+
+Then browse the interactive, auto-generated documentation at [`http://localhost:8000/docs`](http://localhost:8000/docs) (Swagger UI, supports sending real requests directly from the browser) or [`http://localhost:8000/redoc`](http://localhost:8000/redoc), or exercise the endpoints directly with `curl`. The example company used below, `"Sistemi Tamburello S.r.l."`, is part of the seeded database.
+
+⚠️ The commands below pipe the response through `jq` for pretty-printed JSON. Install it first (`sudo apt install jq` / `brew install jq`), or drop `| jq` from any command to see the raw response instead.
+
+```bash
+# Health check
+curl http://localhost:8000/health | jq
+
+# Chat - first turn, no Session-Id header yet
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Qual è il rischio di insolvenza di Sistemi Tamburello S.r.l.?"}' | jq
+
+# Chat - reuse the session_id returned above to continue the conversation
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -H "Session-Id: <session_id from the previous response>" \
+  -d '{"message": "Quali sono le ragioni principali che hanno portato a questa predizione?"}' | jq
+
+# Direct prediction on ad hoc data (not in the database)
+curl -X POST http://localhost:8000/predict/ad-hoc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "unpaid_ratio_trailing_90d": 0.15,
+    "total_outstanding_debt": 12000,
+    "foundation_date": "2015-03-01",
+    "industry_sector": "manufacturing",
+    "registered_office_region": "Lazio"
+  }' | jq
+
+# Direct prediction on an existing company, looked up by legal name or VAT number
+curl -X POST http://localhost:8000/predict/company \
+  -H "Content-Type: application/json" \
+  -d '{"identifier": "Sistemi Tamburello S.r.l."}' | jq
+```
+
+---
+
 ## 🧠 Architectural Decisions & Rationale
 
 
@@ -139,7 +185,6 @@ uv run python -m agent.run_agent
 * **Choice:** `predict` and `predict_from_raw_data` no longer accept a `threshold` parameter from the caller; both always score against `loaded_model.threshold`, read directly from the `selected_threshold` MLflow param logged on the final training run (see `evaluation/plots.ipynb`) when the model bundle is loaded.
 * **Justification:** With `threshold` as a separate caller-supplied argument, nothing prevented a prediction from being scored against a threshold inconsistent with the one the model was actually tuned against. Centralizing it inside the loaded model bundle removes that possibility entirely, at the cost of `load_model` failing fast if a run has no threshold logged, a deliberate trade-off, given a run without one isn't ready to serve predictions in the first place.
 
-
 #### Documentation Extraction via AST/YAML, Never Import
 * **Choice:** `extract_docs.py` reads every Python docstring and dbt model/column description directly from source text (`ast` for `.py` files, `yaml` for `schema.yml`), rather than importing project modules to read `__doc__` via `inspect`.
 * **Justification:** Several modules open real side effects at import time (e.g. a database connection) or pull in heavy dependencies (PyTorch, XGBoost) not needed just to read a docstring; parsing source text avoids triggering any of that.
@@ -163,6 +208,30 @@ uv run python -m agent.run_agent
 #### Canonical Company Name Propagated Through Predictions
 * **Choice:** `predict` reads the company's canonical `legal_name` from the scored DataFrame's index and includes it in `PredictionResult` as `company_name` (`None` for case_b, which has no database record to draw one from). The responder's prompt material also includes a `company_identifiers` block with the user's original free-text wording.
 * **Justification:** Without this, the responder had only an opaque `company_id` to work with and no textual link back to the name the user actually asked about — a gap invisible in isolated testing but immediately apparent the first time a real request paraphrased a company's name rather than repeating it verbatim.
+
+#### API Surface Kept Deliberately Small
+* **Choice:** The API exposes only two endpoint areas: `POST /chat`, routed through the agent, and two direct prediction endpoints (`POST /predict/ad-hoc`, `POST /predict/company`) that call directly into `ml.inference.predictor`. It exposes no endpoint to query the OLTP database or the OLAP star schema directly.
+* **Justification:** The database and the datamart are implementation details of how the agent and the model produce an answer, not something an end user needs, or should be able to, query on their own. Keeping the public surface limited to a conversational entry point and a direct scoring path avoids turning a portfolio inference service into a general-purpose database query API, which was never the goal.
+
+#### `/predict/ad-hoc` and `/predict/company` as Separate Endpoints, Not One Branching Internally
+* **Choice:** The direct prediction area exposes two distinct routes, `POST /predict/ad-hoc` (a fully-specified profile not in the database, `InsolvencyPredictionRequest` + `predict_from_raw_data`) and `POST /predict/company` (an existing company, `ExistingCompanyRequest` + `predict`), rather than a single `/predict` endpoint that inspects the request body to decide which case applies.
+* **Justification:** This mirrors the case_a/case_b distinction already used throughout the rest of the project (extractor, predictor, SHAP), rather than reintroducing it as an implicit branch at the HTTP layer. The two also fail differently in ways that are easier to reason about as separate routes: `/predict/company` can 404 on an identifier that resolves to nothing, a case that does not exist for `/predict/ad-hoc`, which is always a valid, if hypothetical, scoring request as long as it passes Pydantic validation.
+
+#### No Internal Database ID Ever Exposed to the Client
+* **Choice:** `POST /predict/company` accepts a company's legal name or VAT number as `identifier`, resolved to a `company_id` server-side via a parameterized query; that `company_id` is never returned in `PredictionResponse`, which carries `company_name` but not `company_id`.
+* **Justification:** A surrogate database key is an implementation detail of the star schema, not a piece of information the caller supplied or has any independent way to obtain, since no endpoint exists to look one up. Returning it would expose an internal identifier with no actionable use on the client side, the same reasoning that kept the OLTP/OLAP schema unexposed in the first place.
+
+#### Agent and Model Built Once at Startup, Not Per-Request
+* **Choice:** `agent.graph.build_agent()` and `ml.inference.model_loader.load_model()` are never called inside a request handler. The compiled agent is built once in FastAPI's `lifespan` and stored on `app.state.agent`; the loaded model bundle is built once via `@cache` on `api.dependencies.get_loaded_model`, mirroring the same pattern already used by the agent's own predictor node.
+* **Justification:** Both are expensive to construct, wiring together every node of the graph, or loading a full MLflow model bundle. Rebuilding either on every request would add unnecessary latency and load to every single call; building once and reusing the result across requests, injected via `Depends`, keeps that cost off the request path entirely.
+
+#### Per-Session Conversation History, Not a Global List
+* **Choice:** `api/session_store.py` keys conversation history by a client-supplied `session_id` (sent via a `Session-Id` header, generated server-side and echoed back when the client sends none), rather than keeping a single global list the way the CLI (`agent/run_agent.py`) does.
+* **Justification:** The CLI's single in-memory list is only valid because it serves one user, one conversation, at a time. An HTTP server is stateless between requests and may serve several concurrent users (multiple browser tabs against the same Streamlit instance, for example), so history has to be isolated per conversation rather than shared globally. Storage is a plain in-memory dict rather than a persistent store: state is lost on restart and isn't shared across replicas, an accepted limitation for a no-cloud v1.
+
+#### Shared Company-Resolution Query, Not Duplicated Between the Agent and the API
+* **Choice:** The parameterized query that resolves a free-text company identifier (legal name or VAT number) into a `company_id` lives in `utils/queries.py`, imported both by the agent's `extract_case_a` and by `POST /predict/company`, rather than being duplicated or imported by the API from `agent/nodes/`.
+* **Justification:** The two call sites need the exact same resolution logic, so duplicating it would risk the two drifting out of sync if the query ever changed. Importing it from `agent/nodes/` instead would couple the API to the agent's own node package for a single SQL constant, pulling in module-level dependencies (LLM prompts, LangChain imports) the API has no reason to depend on.
 
 ---
 
@@ -190,6 +259,7 @@ XGBoost is the strongest model on every metric except recall, where the MLP reac
 * **Explainable AI (xAI):** SHAP
 * **MLOps & Model Tracking:** MLflow
 * **QA & Enterprise Validation:** Pytest, Pydantic Validation
+* **Configuration Management:** Pydantic Settings
 * **Observability & Logging:** Pydantic Logfire, Ruff
 * **Generative AI Infrastructure:** LangGraph, ChromaDB, Groq
 * **Application Layer & UI:** FastAPI, Streamlit
@@ -327,6 +397,15 @@ insolvency_prediction_project/
 │   │   ├── extract.py
 │   │   └── restore.py
 │   └── __init__.py
+├── api/ 
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── chat.py
+│   │   └── predict.py
+│   ├── __init__.py
+│   ├── dependencies.py
+│   ├── main.py
+│   └── session_store.py
 ├── data/
 │   ├── .gitignore
 │   └── raw.dvc
@@ -413,6 +492,13 @@ insolvency_prediction_project/
 │   │   ├── judge_validation.py
 │   │   ├── route_validation.py
 │   │   └── types.py
+│   ├── api/ 
+│   │   ├── routers/ 
+│   │   │   ├── __init__.py
+│   │   │   ├── chat.py
+│   │   │   └── predict.py
+│   │   ├── __init__.py
+│   │   └── session_validation.py
 │   ├── database/
 │   │   ├── __init__.py
 │   │   ├── base.py
@@ -457,6 +543,15 @@ insolvency_prediction_project/
 │   │   │   ├── test_extract.py
 │   │   │   └── test_restore.py
 │   │   └── __init__.py
+│   ├── api/
+│   │   ├── routers/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_chat.py
+│   │   │   └── test_predict.py
+│   │   ├── __init__.py
+│   │   ├── test_dependencies.py
+│   │   ├── test_main.py
+│   │   └── test_session_store.py
 │   ├── database/
 │   │   ├── __init__.py
 │   │   ├── test_connection.py
@@ -506,6 +601,7 @@ insolvency_prediction_project/
 │   ├── __init__.py
 │   ├── date_validation.py
 │   ├── logging_utils.py
+│   ├── queries.py
 │   └── timezone_utils.py
 ├── .dvcignore
 ├── .env
