@@ -57,6 +57,7 @@ pythonpath = ["."]
 filterwarnings = [
     "ignore::pytest.PytestUnraisableExceptionWarning",
     "ignore::PendingDeprecationWarning:shap.*",
+    "ignore::DeprecationWarning:starlette.testclient",
 ]
 
 [tool.coverage.run]
