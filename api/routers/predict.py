@@ -24,7 +24,7 @@ from api.dependencies import get_loaded_model
 from database.connection import get_db
 from ml.inference.model_loader import LoadedModel
 from ml.inference.predictor import predict, predict_from_raw_data
-from schemas.api.predict import ExistingCompanyRequest, PredictionResponse
+from schemas.api.routers.predict import ExistingCompanyRequest, PredictionResponse
 from schemas.ml.insolvency_prediction import InsolvencyPredictionRequest
 from utils.queries import RESOLVE_COMPANY_ID_QUERY
 
