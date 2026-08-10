@@ -9,7 +9,6 @@ real graph or storage is needed.
 
 """
 
-import uuid
 from unittest.mock import MagicMock
 
 import pytest
@@ -121,13 +120,13 @@ def test_chat_generates_session_id_when_header_missing(
     assert response.status_code == 200
 
     generated_session_id = response.json()["session_id"]
- 
+
     fake_session_store.append_turn.assert_called_once_with(
         generated_session_id,
         "Ciao!",
         "Il rischio è basso.",
     )
- 
+
     # A second call without a header must get its own, different
     # session_id: catches a regeneration bug where the "new" id is
     # accidentally fixed or memoized instead of freshly random each time.
