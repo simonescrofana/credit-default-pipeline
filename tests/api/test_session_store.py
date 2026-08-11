@@ -1,8 +1,9 @@
 """Test suite for the in-memory chat session store.
 
 Covers the happy path for each `SessionStore` method: reading the history of
-a new session, reading the history of an existing session, and appending a
-user/assistant turn.
+a new session, reading the history of an existing session, appending a
+user/assistant turn, and checking whether a session exists (including that
+the check itself creates no side effect).
 
 """
 
@@ -78,3 +79,27 @@ def test_sessions_are_isolated_from_each_other() -> None:
     assert len(store.get_history("session-2")) == 2
     assert store.get_history("session-1")[0].content == "Hello"
     assert store.get_history("session-2")[0].content == "Hey"
+
+
+def test_has_session_returns_false_for_unknown_session() -> None:
+    """Test has_session returns False for a session that was never touched."""
+    store = SessionStore()
+
+    assert store.has_session("unknown-session") is False
+
+
+def test_has_session_returns_true_after_append_turn() -> None:
+    """Test has_session returns True once a turn has been appended."""
+    store = SessionStore()
+    store.append_turn("session-1", user_input="Hello", final_answer="Hi there")
+
+    assert store.has_session("session-1") is True
+
+
+def test_has_session_does_not_create_a_session_as_a_side_effect() -> None:
+    """Test calling has_session does not create an entry for a unknown session."""
+    store = SessionStore()
+
+    store.has_session("unknown-session")
+
+    assert store.has_session("unknown-session") is False

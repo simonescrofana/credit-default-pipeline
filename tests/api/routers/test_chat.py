@@ -132,3 +132,38 @@ def test_chat_generates_session_id_when_header_missing(
     # accidentally fixed or memoized instead of freshly random each time.
     second_response = client.post("/chat", json={"message": "Ancora ciao!"})
     assert second_response.json()["session_id"] != generated_session_id
+
+
+def test_get_chat_history_returns_messages_for_known_session(
+    client: TestClient,
+    fake_session_store,
+) -> None:
+    """Test GET chat endpoint returns the stored messages for a known session."""
+    fake_session_store.has_session.return_value = True
+
+    response = client.get("/chat/abc-123/history")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "session_id": "abc-123",
+        "messages": [
+            {"role": "user", "content": "ciao"},
+            {"role": "assistant", "content": "ciao, come posso aiutarti?"},
+        ],
+    }
+    fake_session_store.has_session.assert_called_once_with("abc-123")
+    fake_session_store.get_history.assert_called_once_with("abc-123")
+
+
+def test_get_chat_history_raises_404_for_unknown_session(
+    client: TestClient,
+    fake_session_store: MagicMock,
+) -> None:
+    """Test GET chat endpoint returns 404 when the store has never seen the session."""
+    fake_session_store.has_session.return_value = False
+
+    response = client.get("/chat/unknown-session/history")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Session 'unknown-session' not found."}
+    fake_session_store.get_history.assert_not_called()

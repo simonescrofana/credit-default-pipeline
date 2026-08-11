@@ -1,19 +1,21 @@
 """Free-text conversation endpoint, routed through the LangGraph agent.
 
-Exposes a single endpoint, `POST /chat`, that forwards the user's message
-to the compiled agent graph (case_a, case_b, rag, or direct routing handled
-internally by the graph) and returns its natural-language answer.
+Exposes `POST /chat`, that forwards the user's message to the compiled
+agent graph (case_a, case_b, rag, or direct routing handled internally by
+the graph) and returns its natural-language answer, and
+`GET /chat/{session_id}/history`, that reads back an existing
+conversation's full message history.
 
 """
 
 import uuid
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException
 from langgraph.graph.state import CompiledStateGraph
 
 from api.dependencies import get_agent, get_session_store
 from api.session_store import SessionStore
-from schemas.api.routers.chat import ChatRequest, ChatResponse
+from schemas.api.routers.chat import ChatHistoryResponse, ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -59,3 +61,41 @@ def chat(
     session_store.append_turn(session_id, request.message, final_answer)
 
     return ChatResponse(final_answer=final_answer, session_id=session_id)
+
+
+@router.get("/{session_id}/history", response_model=ChatHistoryResponse)
+def get_chat_history(
+    session_id: str,
+    session_store: SessionStore = Depends(get_session_store),
+) -> ChatHistoryResponse:
+    """Read back an existing conversation's full message history.
+
+    Used by a client (e.g. the Streamlit UI) to redisplay a past
+    conversation's messages when the user switches back to it, since the
+    server-side session store is the single source of truth for
+    conversation history and it is not duplicated client-side.
+
+    Args:
+        session_id (str): The identifier of the conversation to read,
+            taken from the URL path.
+        session_store (SessionStore): The shared, in-memory session store,
+            injected via `Depends(get_session_store)`.
+
+    Returns:
+        ChatHistoryResponse: The conversation's messages so far, in
+            chronological order.
+
+    Raises:
+        HTTPException: 404 if `session_id` is not known to the store (e.g.
+            it was never used, or the server has since restarted).
+
+    """
+    if not session_store.has_session(session_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Session '{session_id}' not found.",
+        )
+
+    history = session_store.get_history(session_id)
+
+    return ChatHistoryResponse(session_id=session_id, messages=history)

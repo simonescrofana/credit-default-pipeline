@@ -41,6 +41,24 @@ class SessionStore:
         """
         return self.sessions.setdefault(session_id, [])
 
+    def has_session(self, session_id: str) -> bool:
+        """Check whether a session exists, without creating one.
+
+        Unlike `get_history`, this never creates an entry for `session_id`
+        as a side effect, so it is safe to use as an existence check before
+        a read-only lookup (e.g. an HTTP endpoint that should 404 on an
+        unknown session rather than silently reporting an empty history).
+
+        Args:
+            session_id: the identifier of the conversation to check.
+
+        Returns:
+            bool: `True` if `session_id` has at least one turn recorded,
+                `False` otherwise.
+
+        """
+        return session_id in self.sessions
+
     def append_turn(self, session_id: str, user_input: str, final_answer: str) -> None:
         """Append one user/assistant turn to a session's history.
 
