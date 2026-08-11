@@ -86,11 +86,14 @@ def register_conversation(session_id: str, first_message: str) -> None:
     st.session_state[ACTIVE_SESSION_KEY] = session_id
 
 
-def set_active_conversation(session_id: str) -> None:
-    """Mark an already-registered conversation as the active one.
+def set_active_conversation(session_id: str | None) -> None:
+    """Mark a conversation as the active one, or clear the active conversation.
 
     Args:
-        session_id (str): The identifier of the conversation to activate.
+        session_id (str | None): The identifier of the conversation to
+            activate, or `None` to clear the active conversation (e.g.
+            when the user starts a new chat that has not been registered
+            yet).
 
     """
     ensure_registry_initialized()

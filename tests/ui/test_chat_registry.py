@@ -1,10 +1,12 @@
 """Test suite for the client-side conversation registry (ui.chat_registry).
 
-Covers the happy path for each public function, plus the one conditional
-worth testing on its own: `register_conversation` must not overwrite an
-existing conversation's preview when called again for the same
-`session_id`. Since the module reads and writes `st.session_state`, which
-only exists inside a running Streamlit script, every test runs its
+Covers the happy path for each public function (including
+`set_active_conversation`'s two valid inputs, a known session_id and
+`None`, used to clear the active conversation for a new chat), plus the
+one conditional worth testing on its own: `register_conversation` must not
+overwrite an existing conversation's preview when called again for the
+same `session_id`. Since the module reads and writes `st.session_state`,
+which only exists inside a running Streamlit script, every test runs its
 assertions through `streamlit.testing.v1.AppTest`, reading results back via
 `st.text(...)` elements rather than `print(...)`, since `AppTest` captures
 rendered Streamlit elements, not raw stdout.
@@ -120,6 +122,18 @@ def test_set_active_conversation_switches_the_active_session() -> None:
 
     assert at.get("exception") == []
     assert at.text[0].value == "session-1"
+
+
+def test_set_active_conversation_with_none_clears_the_active_session() -> None:
+    """Test set_active_conversation(None) clears the active conversation."""
+    at = _run_script(
+        'register_conversation("session-1", "Prima chat")\n'
+        "set_active_conversation(None)\n"
+        "st.text(str(get_active_conversation_id()))\n"
+    )
+
+    assert at.get("exception") == []
+    assert at.text[0].value == "None"
 
 
 def test_list_conversations_returns_all_registered_conversations_in_order() -> None:
