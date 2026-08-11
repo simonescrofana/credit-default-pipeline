@@ -10,6 +10,18 @@ Run with:
 
 """
 
+
+import sys
+from pathlib import Path
+
+# `streamlit run` executes this file as a standalone script, adding only
+# its own directory (`ui/`) to sys.path, not the project root, so
+# `ui.chat_registry` and `ui.client` would not be importable as a package
+# without this. `uv run` alone does not fix this, since it only manages
+# the environment/interpreter, not how Streamlit resolves the script it is
+# told to execute as a file path rather than a module.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import requests
 import streamlit as st
 
