@@ -195,7 +195,11 @@ def test_responder_node_injects_rejection_reason_on_retry(
         user_input="Which model does this project use?",
         route="rag",
         retrieved_context=[
-            {"text": "XGBoost is the production model.", "distance": 0.1, "metadata": {}}
+            {
+                "text": "XGBoost is the production model.",
+                "distance": 0.1,
+                "metadata": {},
+            }
         ],
         judge_verdict={
             "approved": False,
@@ -223,7 +227,11 @@ def test_responder_node_does_not_inject_hint_when_verdict_is_approved(
         user_input="Which model does this project use?",
         route="rag",
         retrieved_context=[
-            {"text": "XGBoost is the production model.", "distance": 0.1, "metadata": {}}
+            {
+                "text": "XGBoost is the production model.",
+                "distance": 0.1,
+                "metadata": {},
+            }
         ],
         judge_verdict={"approved": True, "reason": "Faithful and relevant."},
     )
