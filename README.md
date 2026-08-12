@@ -114,6 +114,20 @@ curl -X POST http://localhost:8000/predict/company \
 
 ---
 
+## 🖥️ Try the UI
+
+A Streamlit interface wraps the conversational endpoint for terminal-free, non-technical use: a sidebar lists past conversations from the current browser session, and the main panel renders the agent's Markdown-formatted answers instead of raw text. Only `/chat` is surfaced here; direct prediction (`/predict/ad-hoc`, `/predict/company`) targets callers who already have structured data and are expected to use the API directly, as shown above.
+
+With the API still running (see [Try the API](#-try-the-api) above), start the UI in a separate terminal:
+
+```bash
+uv run streamlit run ui/app.py
+```
+
+It opens at [`http://localhost:8501`](http://localhost:8501) by default.
+
+---
+
 ## 🧠 Architectural Decisions & Rationale
 
 
@@ -232,6 +246,14 @@ curl -X POST http://localhost:8000/predict/company \
 #### Shared Company-Resolution Query, Not Duplicated Between the Agent and the API
 * **Choice:** The parameterized query that resolves a free-text company identifier (legal name or VAT number) into a `company_id` lives in `utils/queries.py`, imported both by the agent's `extract_case_a` and by `POST /predict/company`, rather than being duplicated or imported by the API from `agent/nodes/`.
 * **Justification:** The two call sites need the exact same resolution logic, so duplicating it would risk the two drifting out of sync if the query ever changed. Importing it from `agent/nodes/` instead would couple the API to the agent's own node package for a single SQL constant, pulling in module-level dependencies (LLM prompts, LangChain imports) the API has no reason to depend on.
+
+#### The UI Only Exposes `/chat`, Never `/predict/*` Directly
+* **Choice:** `ui/app.py` talks to the API exclusively through `POST /chat` and `GET /chat/{session_id}/history`. It never calls `/predict/ad-hoc` or `/predict/company`.
+* **Justification:** Anyone with structured data ready for a direct prediction endpoint already knows how to make an HTTP call, documented above under Try the API; the UI's purpose is to make the conversational agent usable without a terminal, not to duplicate the direct prediction path behind a form.
+
+#### A Client-Side Conversation Registry, Not a Server-Side One
+* **Choice:** `ui/chat_registry.py` keeps a lightweight, `st.session_state`-backed index of the `session_id`s known to the current browser session, each with a short preview generated from its first user message, so the sidebar can list past conversations. Only the identifier and preview live here; the full message history is never duplicated client-side, and is instead read back from `GET /chat/{session_id}/history` whenever the user switches to a past conversation.
+* **Justification:** `api/session_store.py` is already the single source of truth for conversation history; keeping a second, client-side copy risks the two drifting apart (e.g. after a server restart, which clears server-side history but would leave stale messages behind client-side). Storage in `st.session_state` is scoped to a single browser tab and lost when it closes, the same in-memory, no-cloud limitation already accepted for `SessionStore` on the API side.
 
 ---
 
@@ -590,6 +612,11 @@ insolvency_prediction_project/
 │   ├── simulation/
 │   │   ├── __init__.py
 │   │   └── test_seed.py
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   ├── test_app.py
+│   │   ├── test_chat_registry.py
+│   │   └── test_client.py
 │   ├── utils/
 │   │   ├── __init__.py
 │   │   ├── test_date_validation.py
@@ -597,6 +624,10 @@ insolvency_prediction_project/
 │   ├── __init__.py
 │   └── conftest.py
 ├── ui/
+│   ├── __init__.py
+│   ├── app.py
+│   ├── chat_registry.py
+│   └── client.py 
 ├── utils/
 │   ├── __init__.py
 │   ├── date_validation.py
