@@ -255,20 +255,28 @@ It opens at [`http://localhost:8501`](http://localhost:8501) by default.
 * **Choice:** `ui/chat_registry.py` keeps a lightweight, `st.session_state`-backed index of the `session_id`s known to the current browser session, each with a short preview generated from its first user message, so the sidebar can list past conversations. Only the identifier and preview live here; the full message history is never duplicated client-side, and is instead read back from `GET /chat/{session_id}/history` whenever the user switches to a past conversation.
 * **Justification:** `api/session_store.py` is already the single source of truth for conversation history; keeping a second, client-side copy risks the two drifting apart (e.g. after a server restart, which clears server-side history but would leave stale messages behind client-side). Storage in `st.session_state` is scoped to a single browser tab and lost when it closes, the same in-memory, no-cloud limitation already accepted for `SessionStore` on the API side.
 
+#### `mlruns/` and `mlflow.db` Are Bind-Mounted, Not Baked Into the API Image
+* **Choice:** `docker-compose.yml` mounts the host's existing MLflow tracking DB and artifact store into the `api` container at the same relative path the API's `WORKDIR` expects, rather than copying them into the image at build time or retraining inside the container on every startup.
+* **Justification:** Producing them is a prerequisite of running the containerized stack, the same as filling in `.env`: `docker compose up` orchestrates the already-trained project, it doesn't (re)train it. Bind-mounting also means a freshly retrained model becomes visible to the API on a restart, without rebuilding the image, and keeps the (potentially large) artifacts out of the image itself.
+
+#### The Retry Loop Now Actually Feeds the Judge's Feedback Back In
+* **Choice:** `responder_node` reads `judge_verdict` on every call and, when it holds a rejection, injects its `reason` into the next attempt as an explicit `<correction_needed>` hint, rather than regenerating from the same prompt it used before.
+* **Justification:** Previously, only `graph.py` ever read `judge_verdict`, to decide whether to loop back to the responder at all — the responder itself never saw *why* the judge had rejected its answer, so every retry regenerated essentially the same response and was rejected again for the same reason, exhausting the retry budget and falling through to the fallback message even when the underlying issue was fixable. This was already the intent recorded in `JudgeVerdict`'s own docstring, just never wired up.
+
 ---
 
 ## 📊 Results
  
-Final holdout test set metrics (never seen during training, cross-validation, or hyperparameter tuning), evaluated at each model family's own F2-optimal decision threshold:
- 
+**XGBoost is the production model**, chosen after benchmarking it against a Logistic Regression baseline and a PyTorch MLP on the same final holdout test set (never seen during training, cross-validation, or hyperparameter tuning), each evaluated at its own F2-optimal decision threshold:
+
 | Model | AUC-ROC | AUC-PR | Precision | Recall | F1 |
 |---|---|---|---|---|---|
 | Baseline (Logistic Regression) | 0.8742 | 0.5026 | 0.3911 | 0.9578 | 0.5555 |
 | MLP (PyTorch) | 0.8890 | 0.6030 | 0.3838 | 1.0000 | 0.5547 |
 | **XGBoost** | **0.9198** | **0.6951** | **0.4351** | **0.9794** | **0.6026** |
- 
+
 XGBoost is the strongest model on every metric except recall, where the MLP reaches a perfect 1.0. This is not attributable to a well-chosen decision threshold, the same result holds regardless of the threshold used, suggesting the MLP's predicted probabilities are clustered in a narrow, mostly-high range rather than genuinely separating the two classes. Combined with its lower AUC-ROC and AUC-PR, this points to weaker discrimination overall rather than superior performance. XGBoost is the model served in production, consistent with it being the only model family benchmarked and explained in depth (see the SHAP section below and `ml/evaluation/plots.ipynb`).
- 
+
 ---
 
 ## 🛠️ Tech Stack
@@ -642,6 +650,8 @@ insolvency_prediction_project/
 ├── alembic.ini
 ├── config.py
 ├── docker-compose.yml
+├── Dockerfile.api
+├── Dockerfile.ui
 ├── LICENSE
 ├── pyproject.toml
 ├── README.md
