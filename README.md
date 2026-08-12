@@ -263,6 +263,10 @@ It opens at [`http://localhost:8501`](http://localhost:8501) by default.
 * **Choice:** `responder_node` reads `judge_verdict` on every call and, when it holds a rejection, injects its `reason` into the next attempt as an explicit `<correction_needed>` hint, rather than regenerating from the same prompt it used before.
 * **Justification:** Previously, only `graph.py` ever read `judge_verdict`, to decide whether to loop back to the responder at all — the responder itself never saw *why* the judge had rejected its answer, so every retry regenerated essentially the same response and was rejected again for the same reason, exhausting the retry budget and falling through to the fallback message even when the underlying issue was fixable. This was already the intent recorded in `JudgeVerdict`'s own docstring, just never wired up.
 
+#### Known Limitation: Cross-Lingual RAG Retrieval Is Unreliable
+* **Choice:** No workaround (e.g. translating the query before embedding it, or switching to a larger multilingual embedding model) has been implemented for this v1; the limitation is documented rather than patched around.
+* **Justification:** `all-MiniLM-L6-v2`, the local, CPU-only embedding model used for retrieval, was chosen for being free and requiring no network round-trip per query, at the cost of weaker cross-lingual alignment than a larger or API-hosted model would offer. In practice this means an Italian question about English-language project documentation (e.g. asking which ML model is used and how well it performs) can retrieve chunks with a much weaker semantic match than the same question asked in English, occasionally missing the relevant chunk entirely, an issue neither the responder's nor the judge's prompt can fix once the retriever has already returned the wrong context to work with. A larger or hosted multilingual embedding model would very likely resolve this, at the cost of the constraints that led to the current choice in the first place.
+
 ---
 
 ## 📊 Results
