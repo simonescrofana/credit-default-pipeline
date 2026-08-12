@@ -11,5 +11,47 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: credit_default_api
+    restart: always
+    depends_on:
+      - postgres-db
+    env_file:
+      - .env
+    environment:
+      # Overrides the .env value (usually "localhost", correct for running
+      # the API directly on the host) so the API reaches Postgres by its
+      # service name on the Docker network instead, "localhost" inside
+      # this container would resolve to the container itself, not to
+      # postgres-db.
+      POSTGRES_HOST: postgres-db
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./mlflow.db:/app/mlflow.db
+      - ./mlruns:/app/mlruns
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: credit_default_ui
+    restart: always
+    depends_on:
+      - api
+    env_file:
+      - .env
+    environment:
+      # The UI never talks to Postgres or MLflow directly, only to the API
+      # over HTTP — this is the only setting it actually needs. Reaches
+      # the API by its service name on the Docker network, not by
+      # "localhost" (see ui/client.py's API_BASE_URL).
+      API_BASE_URL: http://api:8000
+    ports:
+      - "127.0.0.1:8501:8501"
+
 volumes:
   postgres_data:
