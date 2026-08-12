@@ -59,7 +59,9 @@ def judge_node(state: AgentState) -> dict:
         verdict: JudgeVerdict = invoke_with_retry(
             structured_llm, messages, max_retries=MAX_RETRIES
         )
-        logger.info("Judge verdict: approved=%s.", verdict.approved)
+        logger.info(
+            "Judge verdict: approved=%s. Reason: %s", verdict.approved, verdict.reason
+        )
     except BadRequestError:
         logger.warning(
             "Judge LLM failed to produce a verdict after %d attempts; "

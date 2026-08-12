@@ -2,7 +2,9 @@
 
 Covers one happy path per route: case_a/case_b inject prediction results as
 tagged JSON, rag injects retrieved context as tagged plain text, and direct
-injects no material at all, sending only the user's input.
+injects no material at all, sending only the user's input. Also covers the
+retry correction loop: a rejected judge_verdict is injected as a
+correction hint, an approved one (or the default None) is not.
 
 """
 
@@ -178,3 +180,55 @@ def test_responder_node_case_a_with_only_errors(mock_get_responder_llm) -> None:
     assert "<prediction_results>" not in user_message
     assert "<prediction_errors>" in user_message
     assert "not found in the database" in user_message
+
+
+@patch("agent.nodes.responder.get_responder_llm")
+def test_responder_node_injects_rejection_reason_on_retry(
+    mock_get_responder_llm,
+) -> None:
+    """Verify a rejected judge_verdict is injected as a correction hint."""
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = MagicMock(content="XGBoost, with these metrics...")
+    mock_get_responder_llm.return_value = mock_llm
+
+    state = AgentState(
+        user_input="Which model does this project use?",
+        route="rag",
+        retrieved_context=[
+            {"text": "XGBoost is the production model.", "distance": 0.1, "metadata": {}}
+        ],
+        judge_verdict={
+            "approved": False,
+            "reason": "The response did not name the model.",
+        },
+    )
+    responder_node(state)
+
+    sent_messages = mock_llm.invoke.call_args.args[0]
+    user_message = sent_messages[1].content
+    assert "<correction_needed>" in user_message
+    assert "The response did not name the model." in user_message
+
+
+@patch("agent.nodes.responder.get_responder_llm")
+def test_responder_node_does_not_inject_hint_when_verdict_is_approved(
+    mock_get_responder_llm,
+) -> None:
+    """Verify an approved judge_verdict injects no correction hint."""
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = MagicMock(content="XGBoost, with these metrics...")
+    mock_get_responder_llm.return_value = mock_llm
+
+    state = AgentState(
+        user_input="Which model does this project use?",
+        route="rag",
+        retrieved_context=[
+            {"text": "XGBoost is the production model.", "distance": 0.1, "metadata": {}}
+        ],
+        judge_verdict={"approved": True, "reason": "Faithful and relevant."},
+    )
+    responder_node(state)
+
+    sent_messages = mock_llm.invoke.call_args.args[0]
+    user_message = sent_messages[1].content
+    assert "<correction_needed>" not in user_message
