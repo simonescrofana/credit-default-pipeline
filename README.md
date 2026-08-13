@@ -300,6 +300,16 @@ It opens at [`http://localhost:8501`](http://localhost:8501) by default.
 * **Choice:** No workaround (e.g. translating the query before embedding it, or switching to a larger multilingual embedding model) has been implemented for this v1; the limitation is documented rather than patched around.
 * **Justification:** `all-MiniLM-L6-v2`, the local, CPU-only embedding model used for retrieval, was chosen for being free and requiring no network round-trip per query, at the cost of weaker cross-lingual alignment than a larger or API-hosted model would offer. In practice this means an Italian question about English-language project documentation (e.g. asking which ML model is used and how well it performs) can retrieve chunks with a much weaker semantic match than the same question asked in English, occasionally missing the relevant chunk entirely, an issue neither the responder's nor the judge's prompt can fix once the retriever has already returned the wrong context to work with. A larger or hosted multilingual embedding model would very likely resolve this, at the cost of the constraints that led to the current choice in the first place.
 
+#### One `Makefile` Command Covers the Full Rebuild, Not a Sequence the User Has to Remember
+
+* **Choice:** `make software` (restore from DVC) and `make software_alternative` (re-seed from scratch) chain every step, migrations through bringing up the containerized stack, into a single command, rather than documenting a sequence of commands the user has to run in order and get right.
+* **Justification:** Reconstructing the project from a clean clone touches several independent tools (Alembic, DVC, dbt, MLflow, the RAG index, Docker Compose), each with its own prerequisites and ordering constraints; a single entry point per rebuild path removes the chance of a step being skipped or run out of order, and gives the two realistic starting points (already-tracked data vs. regenerating it from scratch) explicit, separate names instead of leaving the choice implicit in which commands happen to be run.
+
+#### Postgres Readiness Is Actively Polled, Not Assumed
+
+* **Choice:** Before running migrations, the pipeline polls `pg_isready` against the `postgres-db` container in a loop instead of assuming the database is ready as soon as `docker compose up -d postgres-db` returns.
+* **Justification:** A freshly created volume takes a few seconds to finish Postgres's own initialization, and Compose's `depends_on` only waits for the container process to have started, not for Postgres inside it to actually be accepting connections, running migrations immediately after start-up intermittently raced against that initialization and failed with a connection error. Polling for actual readiness removes that race instead of papering over it with a fixed sleep that would either be too short on a slower machine or waste time on a faster one.
+
 ---
 
 ## 📊 Results
