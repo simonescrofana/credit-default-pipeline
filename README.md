@@ -30,6 +30,101 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 
 ---
 
+## 🚀 Getting Started
+
+This section walks through everything needed to go from a fresh clone to the full stack running, on a clean Ubuntu/WSL2 machine.
+
+### 1. Install prerequisites
+
+* **[`uv`](https://docs.astral.sh/uv/)**, the project's package and environment manager:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+* **Docker Engine**, via the official convenience script rather than `apt install docker` (that package name doesn't resolve on Ubuntu):
+
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER   # then reboot the WSL/Ubuntu for this to take effect
+```
+
+* `make` and `git`, usually already present on Ubuntu/WSL2; if not, `sudo apt install -y make git`.
+* **[`direnv`](https://direnv.net/)** (optional — only needed for working inside `analytics/dbt_project/` interactively, not for anything under `make`):
+
+```bash
+sudo apt install -y direnv
+echo 'eval "$(direnv hook bash)"' >> ~/.bashrc && source ~/.bashrc
+```
+
+### 2. Clone and configure
+
+```bash
+git clone https://github.com/simonescrofana/credit-default-pipeline
+cd credit-default-pipeline
+cp .env.example .env   # then fill it in with your own values
+```
+
+* **DVC remote credentials** — this project's DVC remote (DagsHub) requires authentication that is never stored in the repo. Set it once, locally:
+
+```bash
+uv run dvc remote modify --local origin auth basic
+uv run dvc remote modify --local origin user <your-dagshub-username>
+uv run dvc remote modify --local origin password <your-dagshub-token>
+```
+
+  Generate a token under your DagsHub profile → Settings → Tokens.
+
+* **dbt profile** — dbt reads connection details from `~/.dbt/profiles.yml`, a per-machine file that is never part of the repo either:
+
+```bash
+mkdir -p ~/.dbt
+cat > ~/.dbt/profiles.yml << 'EOF'
+dbt_project:
+  outputs:
+    dev:
+      dbname: "{{ env_var('POSTGRES_DB', 'insolvency_db') }}"
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      pass: "{{ env_var('POSTGRES_PASSWORD') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5433') | as_number }}"
+      schema: public
+      threads: 1
+      type: postgres
+      user: "{{ env_var('POSTGRES_USER') }}"
+  target: dev
+EOF
+```
+
+#### 3. Run the pipeline
+
+`make` (or `make help`) lists every available command. Two end-to-end pipelines rebuild the whole project and bring up the full stack (Postgres, API, UI) in one shot:
+⚠️ WARNING: Running the first fast pipeline took almost 1 hour on my hardware AMD Ryzen 7 8845HS, 16GB RAM, 512 GB SSD M.2 PCIe Gen4.
+
+```bash
+make software              # restores data from DVC - fast
+```
+
+```bash
+make software_alternative  # regenerates data from scratch with Faker - slow, ~2h+ just for seeding
+```
+
+Either one runs migrations, loads or generates the OLTP data, builds the dbt star schema, trains and evaluates every model, builds the agent's documentation index, and finally starts `postgres-db`, `api`, and `ui` via Docker Compose. Once it finishes, the API is at `http://localhost:8000/docs` and the UI at `http://localhost:8501`, exactly as described above under Try the API and Try the UI.
+
+For working on one piece at a time instead, see `make help` for the individual steps (`migration`, `population`/`seed`, `analytics`, `train`, `rag`, `up`/`down`, ...) that the two pipelines above are built from.
+
+#### Troubleshooting: containers can't reach the internet
+
+If a running container (e.g. `api` failing to reach Groq or Logfire, timing out instead of erroring quickly) can't reach the outside world even though the host itself has working internet access, this is a known Docker-on-WSL2 networking issue (native Docker Engine, not Docker Desktop) — it can show up the first time Docker starts after installation, or after the host's network state changes (e.g. sleep/resume, reconnecting Wi-Fi). Restarting the Docker service resolves it:
+
+```bash
+sudo service docker restart
+docker compose down
+docker compose up -d
+```
+
+---
+
 ## 🤖 Agent Graph
 
 The Generative AI layer is built as an explicit LangGraph state machine. A router node classifies every incoming request into one of four routes; all four converge on a shared LLM response node. The two prediction routes (existing or ad hoc company) both pass through a shared extraction and prediction step first. A generic, unrouted question skips validation entirely and returns directly; every other response is checked by an LLM-as-a-Judge node, which can send it back to be regenerated up to a fixed retry cap, past which a static fallback message is returned instead:
@@ -323,100 +418,6 @@ It opens at [`http://localhost:8501`](http://localhost:8501) by default.
 | **XGBoost**              | **0.9198** | **0.6951** | **0.4351** | **0.9794** | **0.6026** |
 
 XGBoost is the strongest model on every metric except recall, where the MLP reaches a perfect 1.0. This is not attributable to a well-chosen decision threshold, the same result holds regardless of the threshold used, suggesting the MLP's predicted probabilities are clustered in a narrow, mostly-high range rather than genuinely separating the two classes. Combined with its lower AUC-ROC and AUC-PR, this points to weaker discrimination overall rather than superior performance. XGBoost is the model served in production, consistent with it being the only model family benchmarked and explained in depth (see the SHAP section below and `ml/evaluation/plots.ipynb`).
-
----
-
-## 🚀 Getting Started
-
-This section walks through everything needed to go from a fresh clone to the full stack running, on a clean Ubuntu/WSL2 machine.
-
-### 1. Install prerequisites
-
-* **[`uv`](https://docs.astral.sh/uv/)**, the project's package and environment manager:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-* **Docker Engine**, via the official convenience script rather than `apt install docker` (that package name doesn't resolve on Ubuntu):
-
-```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER   # then reboot the WSL/Ubuntu for this to take effect
-```
-
-* `make` and `git`, usually already present on Ubuntu/WSL2; if not, `sudo apt install -y make git`.
-* **[`direnv`](https://direnv.net/)** (optional — only needed for working inside `analytics/dbt_project/` interactively, not for anything under `make`):
-
-```bash
-sudo apt install -y direnv
-echo 'eval "$(direnv hook bash)"' >> ~/.bashrc && source ~/.bashrc
-```
-
-### 2. Clone and configure
-
-```bash
-git clone https://github.com/simonescrofana/credit-default-pipeline
-cd credit-default-pipeline
-cp .env.example .env   # then fill it in with your own values
-```
-
-* **DVC remote credentials** — this project's DVC remote (DagsHub) requires authentication that is never stored in the repo. Set it once, locally:
-
-```bash
-uv run dvc remote modify --local origin auth basic
-uv run dvc remote modify --local origin user <your-dagshub-username>
-uv run dvc remote modify --local origin password <your-dagshub-token>
-```
-
-  Generate a token under your DagsHub profile → Settings → Tokens.
-
-* **dbt profile** — dbt reads connection details from `~/.dbt/profiles.yml`, a per-machine file that is never part of the repo either:
-
-```bash
-mkdir -p ~/.dbt
-cat > ~/.dbt/profiles.yml << 'EOF'
-dbt_project:
-  outputs:
-    dev:
-      dbname: "{{ env_var('POSTGRES_DB', 'insolvency_db') }}"
-      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
-      pass: "{{ env_var('POSTGRES_PASSWORD') }}"
-      port: "{{ env_var('POSTGRES_PORT', '5433') | as_number }}"
-      schema: public
-      threads: 1
-      type: postgres
-      user: "{{ env_var('POSTGRES_USER') }}"
-  target: dev
-EOF
-```
-
-#### 3. Run the pipeline
-
-`make` (or `make help`) lists every available command. Two end-to-end pipelines rebuild the whole project and bring up the full stack (Postgres, API, UI) in one shot:
-
-```bash
-make software              # restores data from DVC — fast
-```
-
-```bash
-make software_alternative  # regenerates data from scratch with Faker — slow, ~2h+ just for seeding
-```
-
-Either one runs migrations, loads or generates the OLTP data, builds the dbt star schema, trains and evaluates every model, builds the agent's documentation index, and finally starts `postgres-db`, `api`, and `ui` via Docker Compose. Once it finishes, the API is at `http://localhost:8000/docs` and the UI at `http://localhost:8501`, exactly as described above under Try the API and Try the UI.
-
-For working on one piece at a time instead, see `make help` for the individual steps (`migration`, `population`/`seed`, `analytics`, `train`, `rag`, `up`/`down`, ...) that the two pipelines above are built from.
-
-#### Troubleshooting: containers can't reach the internet
-
-If a running container (e.g. `api` failing to reach Groq or Logfire, timing out instead of erroring quickly) can't reach the outside world even though the host itself has working internet access, this is a known Docker-on-WSL2 networking issue (native Docker Engine, not Docker Desktop) — it can show up the first time Docker starts after installation, or after the host's network state changes (e.g. sleep/resume, reconnecting Wi-Fi). Restarting the Docker service resolves it:
-
-```bash
-sudo service docker restart
-docker compose down
-docker compose up -d
-```
 
 ---
 
