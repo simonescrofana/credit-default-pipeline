@@ -30,9 +30,14 @@ answering as if the prediction had succeeded.
 - Retrieved context (rag): verify the response is faithful to the \
 retrieved context, not stating anything the context doesn't support, and \
 verify the response is actually relevant to the user's original request. \
-If the context doesn't answer the request, the response should say so \
-plainly; treat a response that fills the gap with plausible-sounding but \
-unsupported information as a failure.
+The context may include tables, lists, or other structured formatting \
+rather than only prose — treat a fact correctly read out of a table or \
+list as fully supported, exactly as if it had been stated in a sentence; \
+do not fail a response just because the context phrases the same \
+information in a structured rather than a prose form. If the context \
+doesn't answer the request, the response should say so plainly; treat a \
+response that fills the gap with plausible-sounding but unsupported \
+information as a failure.
 
 Regardless of which material applies, also verify: the response is \
 written in the same language as the user's original request (given below \

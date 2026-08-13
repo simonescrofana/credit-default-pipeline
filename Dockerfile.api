@@ -1,0 +1,23 @@
+# Serves the FastAPI backend (api.main:app), exposing the LangGraph agent
+# and the XGBoost model over HTTP. See Dockerfile.ui for the Streamlit
+# frontend, built as a separate image with an independent lifecycle.
+
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync --frozen
+
+COPY api/ ./api/
+COPY agent/ ./agent/
+COPY ml/ ./ml/
+COPY database/ ./database/
+COPY schemas/ ./schemas/
+COPY utils/ ./utils/
+COPY config.py ./
+
+EXPOSE 8000
+
+CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

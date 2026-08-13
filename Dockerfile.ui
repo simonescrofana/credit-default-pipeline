@@ -1,0 +1,22 @@
+# Serves the Streamlit chat UI (ui/app.py), a thin HTTP client for the
+# FastAPI backend (see Dockerfile.api). It never imports agent/, ml/,
+# database/, or schemas/ directly, it only talks to the API over HTTP,
+# so none of those packages need to be copied into this image.
+
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync --frozen
+
+COPY ui/ ./ui/
+
+EXPOSE 8501
+
+# --server.address=0.0.0.0: Streamlit defaults to serving on localhost
+# only, which would make it unreachable from outside its own container
+# (e.g. when a port is published to the host, or another container tries
+# to reach it).
+CMD ["uv", "run", "streamlit", "run", "ui/app.py", "--server.address=0.0.0.0", "--server.port=8501"]

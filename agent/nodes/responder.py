@@ -128,6 +128,20 @@ def responder_node(state: AgentState) -> dict:
     material = build_material(state)
     user_content = f"{material}\n\n{state.user_input}" if material else state.user_input
 
+    # On a retry, the judge already rejected a prior attempt: feed its
+    # reason back in as a correction hint, so this attempt can actually
+    # fix what was wrong instead of blindly regenerating the same answer
+    # and getting rejected again for the same reason.
+    if state.judge_verdict and not state.judge_verdict.get("approved"):
+        user_content = (
+            f"{user_content}\n\n"
+            "<correction_needed>\n"
+            "Your previous answer to this request was rejected. Reason:\n"
+            f"{state.judge_verdict.get('reason', '')}\n"
+            "Write a new answer that fixes this issue.\n"
+            "</correction_needed>"
+        )
+
     messages = [
         SystemMessage(content=RESPONDER_SYSTEM_PROMPT),
         HumanMessage(content=user_content),
