@@ -13,7 +13,7 @@ This project is actively developed to simulate an enterprise-grade AI infrastruc
 * **[x] Phase 3:** MLOps Data Versioning (DVC Data Tracking) & OLAP Warehouse Transformation (dbt Core, Star Schema).
 * **[x] Phase 4:** Machine Learning Benchmark Suite (Sklearn, XGBoost, PyTorch) & Experiment Tracking (MLflow).
 * **[x] Phase 5:** Explainable AI (SHAP) Integration & Agentic GenAI Layer (LangGraph + ChromaDB).
-* **[ ] Phase 6:** Production Exposure (FastAPI App) & Live Monitoring/Observability UI (Streamlit + Pydantic + Logfire).
+* **[x] Phase 6:** Production Exposure (FastAPI App) & Live Monitoring/Observability UI (Streamlit + Pydantic + Logfire).
 
 ---
 
@@ -422,7 +422,7 @@ docker compose up -d
 
 ## 🛠️ Tech Stack
 
-* **Infrastructure & DevOps:** Docker, Docker Compose, GitHub Actions (CI/CD)
+* **Infrastructure & DevOps:** Docker, Docker Compose, GitHub Actions (CI)
 * **Environment & Package Management:** Python, uv
 * **Data Engineering & Storage:** PostgreSQL, SQLAlchemy, Alembic, dbt Core
 * **Data Versioning:** DVC
