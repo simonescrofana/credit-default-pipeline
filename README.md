@@ -1,19 +1,6 @@
 # Enterprise Credit Default Pipeline & GenAI Analyst
 
-An end-to-end, production-grade MLOps and Data Engineering pipeline designed to predict credit default on highly imbalanced financial and transactional data. Features a decoupled storage architecture, automated experiment tracking, perimetric data validation, and a Generative AI assistant agent integrated with Explainable AI (xAI) metrics.
-
----
-
-## 🚧 Project Status & Roadmap
-
-This project is actively developed to simulate an enterprise-grade AI infrastructure deployment.
-
-* **[x] Phase 1:** Infrastructure Setup (Docker, PostgreSQL, GitHub Actions).
-* **[x] Phase 2:** OLTP Core Banking Database Setup & Schema Design (SQLAlchemy ORM + Alembic Migrations).
-* **[x] Phase 3:** MLOps Data Versioning (DVC Data Tracking) & OLAP Warehouse Transformation (dbt Core, Star Schema).
-* **[x] Phase 4:** Machine Learning Benchmark Suite (Sklearn, XGBoost, PyTorch) & Experiment Tracking (MLflow).
-* **[x] Phase 5:** Explainable AI (SHAP) Integration & Agentic GenAI Layer (LangGraph + ChromaDB).
-* **[x] Phase 6:** Production Exposure (FastAPI App) & Live Monitoring/Observability UI (Streamlit + Pydantic + Logfire).
+An end-to-end, production-grade MLOps and Data Engineering pipeline designed to predict corporate insolvency on highly imbalanced financial and transactional data. Features a decoupled storage architecture, automated experiment tracking, perimetric data validation, and a Generative AI assistant agent integrated with Explainable AI (xAI) metrics.
 
 ---
 
@@ -22,8 +9,8 @@ This project is actively developed to simulate an enterprise-grade AI infrastruc
 The system is engineered using a strictly decoupled, multi-layered architecture to process data securely from ingestion to intelligent, explainable inference:
 
 1. **Transactional Layer (OLTP):** Containerized PostgreSQL instance simulating a production core-banking system managed via SQLAlchemy ORM and tracked through Alembic migrations.
-2. **Analytical Layer (OLAP):** Dimensional Data Warehouse modeled into a Star Schema driven by dbt Core over historical immutable ledgers.
-3. **MLOps & Lifecyle Layer:** Data version control implemented with DVC. Multi-model training pipeline (a cost-sensitive baseline, Gradient Boosted Trees, and a PyTorch Neural Network) integrated with MLflow for artifact logging, hyperparameter tracking, and model registry.
+2. **Analytical Layer (OLAP):** Dimensional Data Warehouse modeled into a Star Schema driven by dbt Core over historical immutable ledgers, with point-in-time correctness enforced through SCD Type 2 dimensions and as-of temporal joins.
+3. **MLOps & Lifecycle Layer:** Data version control implemented with DVC. Multi-model training pipeline (a cost-sensitive baseline, Gradient Boosted Trees, and a PyTorch Neural Network) integrated with MLflow for artifact logging, hyperparameter tracking, and model registry.
 4. **Explainable AI (xAI) Module:** Interpretability extraction utilizing SHAP to ensure credit scoring compliance and transparency.
 5. **Generative AI Layer:** An agent system built via LangGraph acting as an autonomous financial analyst, querying a ChromaDB vector store, running local inference, and validated by an LLM-as-a-Judge node.
 6. **Application & Serving Layer:** A FastAPI backend exposing validated REST endpoints for predictions and chat interactions, paired with a Streamlit interface acting as a live, interactive demo of the full pipeline.
@@ -37,22 +24,17 @@ This section walks through everything needed to go from a fresh clone to the ful
 ### 1. Install prerequisites
 
 * **[`uv`](https://docs.astral.sh/uv/)**, the project's package and environment manager:
-
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-
 * **Docker Engine**, via the official convenience script rather than `apt install docker` (that package name doesn't resolve on Ubuntu):
-
 ```bash
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 sudo usermod -aG docker $USER   # then reboot the WSL/Ubuntu for this to take effect
 ```
-
 * `make` and `git`, usually already present on Ubuntu/WSL2; if not, `sudo apt install -y make git`.
 * **[`direnv`](https://direnv.net/)** (optional — only needed for working inside `analytics/dbt_project/` interactively, not for anything under `make`):
-
 ```bash
 sudo apt install -y direnv
 echo 'eval "$(direnv hook bash)"' >> ~/.bashrc && source ~/.bashrc
@@ -67,17 +49,13 @@ cp .env.example .env   # then fill it in with your own values
 ```
 
 * **DVC remote credentials** — this project's DVC remote (DagsHub) requires authentication that is never stored in the repo. Set it once, locally:
-
 ```bash
 uv run dvc remote modify --local origin auth basic
 uv run dvc remote modify --local origin user <your-dagshub-username>
 uv run dvc remote modify --local origin password <your-dagshub-token>
 ```
-
   Generate a token under your DagsHub profile → Settings → Tokens.
-
 * **dbt profile** — dbt reads connection details from `~/.dbt/profiles.yml`, a per-machine file that is never part of the repo either:
-
 ```bash
 mkdir -p ~/.dbt
 cat > ~/.dbt/profiles.yml << 'EOF'
@@ -104,7 +82,6 @@ EOF
 ```bash
 make software              # restores data from DVC - fast
 ```
-
 ```bash
 make software_alternative  # regenerates data from scratch with Faker - slow, ~2h+ just for seeding
 ```
@@ -155,8 +132,8 @@ graph TD
 
 ## 💬 Try the Agent
 
-Ready-to-use example prompts for every route the agent handles — no need to guess a valid ad hoc company profile or which companies exist in the database — are available under [`docs/prompts/`](docs/prompts/), in both Italian and English. Run the agent with:
-
+Ready-to-use example prompts for every route the agent handles are available under [`docs/prompts/`](docs/prompts/), in both Italian and English. Run the agent with:
+ 
 ```bash
 uv run python -m agent.run_agent
 ```
@@ -211,213 +188,15 @@ curl -X POST http://localhost:8000/predict/company \
 
 ## 🖥️ Try the UI
 
-A Streamlit interface wraps the conversational endpoint for terminal-free, non-technical use: a sidebar lists past conversations from the current browser session, and the main panel renders the agent's Markdown-formatted answers instead of raw text. Only `/chat` is surfaced here; direct prediction (`/predict/ad-hoc`, `/predict/company`) targets callers who already have structured data and are expected to use the API directly, as shown above.
+A Streamlit interface wraps the conversational endpoint for terminal-free, non-technical use: a sidebar lists past conversations from the current browser session, and the main panel renders the agent's Markdown-formatted answers instead of raw text. Only the conversational endpoint is surfaced here; direct prediction targets callers who already have structured data and are expected to use the API directly, as shown above.
 
-With the API still running (see [Try the API](#-try-the-api) above), start the UI in a separate terminal:
+With the API still running (see Try the API above), start the UI in a separate terminal:
 
 ```bash
 uv run streamlit run ui/app.py
 ```
 
 It opens at [`http://localhost:8501`](http://localhost:8501) by default.
-
----
-
-## 🧠 Architectural Decisions & Rationale
-
-#### Modern Python Tooling (`uv` + Ruff)
-
-* **Choice:** Moving away from standard `pip`/`venv` and selecting `uv` as the exclusive dependency manager alongside Ruff for quality gating.
-* **Justification:** `uv` provides blazing-fast environment synchronization and strict, deterministic lockfile management, eliminating the "it works on my machine" anti-pattern in production containers. Ruff guarantees lightning-fast code linting and formatting compliance natively during pre-commit and CI stages.
-
-#### Complete Isolation of OLTP and OLAP Store
-
-* **Choice:** Running an analytical dbt layer over isolated analytical tables instead of running feature engineering queries straight against live application tables.
-* **Justification:** Aggregation queries on production ledgers introduce lock contention and severely degrade user experience. Isolating data access ensures transactional low-latency uptime while enabling heavy-duty relational processing inside an optimized data warehouse.
-
-#### Feature Engineering Delegated to the Analytical Layer
-
-* **Choice:** Performing the heavy feature engineering (trailing-window aggregations, as-of temporal joins, SCD2 resolution) inside dbt/SQL, keeping the Python ML layer focused on feature *preparation* (encoding, imputation, scaling) rather than feature *engineering*.
-* **Justification:** Keeping a single source of truth for business logic in SQL/dbt — already covered by dedicated data-quality and leakage tests — avoids duplicating transformation logic across languages and reduces the risk of training/serving skew.
-
-#### Temporal Integrity as a First-Class Constraint
-
-* **Choice:** Treating the feature mart as panel data (one row per company per snapshot date) and designing every split, validation, and dimension-resolution strategy around a point-in-time cutoff instead of random shuffling.
-* **Justification:** Credit risk data is inherently sequential. A random split would leak future information into training and produce metrics that look strong but collapse in production; SCD Type 2 dimensions and as-of joins ensure that every feature reflects only information that was actually available at the snapshot date.
-
-#### Trailing DPD Window Fix (Data Quality)
-
-* **Choice:** Widened the 90-day trailing window used by `int_billing_trailing_90d` to select candidate invoices to 120 days, without changing the underlying days-past-due calculation.
-* **Justification:** While validating the ML feature set end-to-end, the original 90-day window was found to systematically exclude unpaid invoices right before their days-past-due value could reach the 90-day insolvency threshold, silently producing zero labeled insolvencies across the entire mart. 120 days is the minimum window that reliably captures the threshold under monthly snapshots.
-
-#### Near-Leakage Feature Removal (Data Quality)
-
-* **Choice:** Removed `avg_dpd_trailing_90d` from the training feature set entirely, after it was found responsible for most of a suspiciously high test-set AUC-PR.
-* **Justification:** An AUC-PR of 0.988 (XGBoost) prompted a targeted investigation rather than acceptance at face value. Removing the feature alone dropped AUC-PR to 0.691 (XGBoost), 0.633 (baseline), and 0.499 (MLP) — a consistent drop across all three model families — confirming it was strongly correlated (Pearson 0.80) with the deterministic label-generating column `max_dpd_trailing_90d` and was dominating the shared predictive signal rather than the models learning it independently.
-
-#### Informative Missing Values over Blind Imputation or Row Dropping
-
-* **Choice:** Nullable feature groups (financial statement ratios, login activity, support ticket satisfaction) are handled with a per-group binary flag marking whether the value was observed, followed by a group-specific fallback constant, rather than dropping incomplete rows or imputing with a statistical average.
-* **Justification:** A diagnostic query showed that a naive `dropna` would have discarded roughly 77% of the dataset, disproportionately removing companies with no recent support tickets — a systematic selection bias, not a random one. The missingness itself is informative (e.g. no resolved tickets recently, no published financial statement yet), so it is preserved as a signal instead of being discarded or disguised as an invented average.
-
-#### Size-Weighted Cross-Validation Metric Aggregation
-
-* **Choice:** Aggregating per-fold validation metrics with a mean weighted by each fold's validation set size, while confusion matrix counts (true/false positives/negatives) are summed rather than averaged.
-* **Justification:** `TimeSeriesSplit`'s expanding window produces folds of unequal size, so an unweighted mean would give a small, less reliable early fold the same influence as a large, more reliable later one. Confusion matrix counts are absolute quantities tied to fold size; averaging them (weighted or not) yields a number with no clear interpretation, while summing preserves their meaning as a total across the full cross-validation run, since each row is scored exactly once.
-
-#### Structural Typing over a Shared Model Base Class
-
-* **Choice:** Defining an `Estimator` structural protocol (`fit`/`predict_proba`) that scikit-learn estimators and a custom PyTorch wrapper both satisfy implicitly, rather than forcing a shared base class or inheritance hierarchy across model families.
-* **Justification:** scikit-learn and PyTorch models have fundamentally different internals (a declarative `.fit()` call versus a manual training loop); requiring a common base class would either constrain scikit-learn's own class hierarchy or force an artificial wrapper on it. Structural typing lets the training orchestrator depend only on the shape of the interface, keeping both model families and the orchestrator itself decoupled from one another.
-
-#### F2-Optimal Decision Threshold per Model Family
-
-* **Choice:** Instead of using the default 0.5 probability cutoff to convert predicted probabilities into a binary class, each model family's decision threshold is separately tuned by maximizing the F2-score on the aggregated cross-validation folds (computed in `evaluation/plots.ipynb`), then wired into the final training run.
-* **Justification:** Under substantial class imbalance (~16% positive rate), 0.5 is an arbitrary cutoff with no particular statistical justification, and each model family produces probabilities on a different scale. F2 weighs recall more heavily than precision, appropriate for insolvency prediction where missing an actual default is costlier than a false alarm; tuning it per model family, rather than sharing one global threshold, respects each family's own calibration instead of forcing a shared assumption onto all three.
-
-#### Manual Hyperparameter Tuning via Shell Scripts
-
-* **Choice:** Hyperparameter search is performed as a manual grid search driven by dedicated shell scripts under `ml/tuning/scripts/`, one per model family (plus a narrower `fine_tune_xgb.sh` second pass for XGBoost, once the full grid pointed to a promising region). Each script temporarily patches the relevant defaults via `sed`, runs the training pipeline for that combination, and appends the resulting cross-validation metrics to a CSV under `ml/tuning/results/`, keeping full per-run logs under `ml/tuning/logs/`. The original files are always restored on exit (success, failure, or interruption).
-* **Justification:** With only 2-3 hyperparameters explored per model family, a manual grid search keeps the process reproducible and inspectable without adding a new dependency or learning curve. A shared quirk had to be worked around: `setup_logging()` registers both a plain `StreamHandler` and Logfire's handler, and Logfire also echoes the same line to stdout independently, so each log line is captured twice, the parsing step takes only the first occurrence to avoid corrupting the results CSV.
-
-#### SHAP-Driven Input Validation for Ad Hoc Predictions
-
-* **Choice:** XGBoost is the only model family explained via SHAP (`ml/evaluation/explainability.py`, built on `TreeExplainer`), since only the best-performing model is ever deployed, and prior benchmarking already pointed to XGBoost, investing explainability effort in the baseline or MLP would not translate into production value. That same SHAP analysis (see the beeswarm plot in `ml/evaluation/plots.ipynb`) directly drives which fields are required versus optional in the `InsolvencyPredictionRequest` Pydantic schema used to validate ad hoc predictions for companies not yet in the database: the two dominant features (`unpaid_ratio_trailing_90d`, `total_outstanding_debt`) are mandatory, while the rest are optional and left as NaN when omitted.
-* **Justification:** This ties the validation layer's strictness to actual, measured feature importance rather than an arbitrary judgment call about which fields "feel" necessary, and lets XGBoost's native missing-value handling (the model is trained with `handle_nan=False`) degrade gracefully on the fields it relies on least.
-
-#### Router-First Agent Design
-
-* **Choice:** The agent's graph classifies every incoming request into one of four explicit routes (`case_a`, `case_b`, `rag`, `direct`) before any downstream node runs. The alternative considered was invoking retrieval unconditionally on every request and relying on a low similarity score to fall back to a direct answer when nothing relevant came back.
-* **Justification:** Retrieval is not free: every ChromaDB query adds latency and risks injecting irrelevant context into the prompt for requests that don't need it (e.g. a greeting or an out-of-scope question). An explicit router keeps each path in the graph doing only the work it actually needs, at the cost of depending on the router's own classification accuracy.
-
-#### Single Source of Truth for the Agent's Routing Type
-
-* **Choice:** The `Literal` of valid routes is defined once, as `AgentRoute` in `schemas/agent/types.py`, and reused both by `RouterDecision` (the schema constraining the router LLM's structured output) and by `AgentState.route` (the graph's own state). The router's LLM output is validated against `RouterDecision` alone rather than the full `AgentState`, keeping the model's output surface limited to the one field it is actually responsible for producing.
-* **Justification:** The two schemas serve different purposes — one shapes what the LLM is allowed to return, the other is the graph's source of truth — but they must always agree on the same set of valid routes. Defining that set once and importing it in both places removes the possibility of the two drifting out of sync if a new route is ever added.
-
-#### Groq as the LLM Hosting Provider (`openai/gpt-oss-120b`)
-
-* **Choice:** The agent's LLM calls are served via Groq, currently using `openai/gpt-oss-120b`, rather than a locally self-hosted open-weight model.
-* **Justification:** The project's local hardware is CPU-only, ruling out running a model of this size directly. Groq offers a genuinely free tier (no credit card required) with low-latency inference over open-weight models, making it a better fit than a smaller, locally runnable model that would trade off response quality.
-
-#### Extraction, Not Query or Feature Generation
-
-* **Choice:** The extractor node never lets the LLM produce SQL or a ready-to-use feature DataFrame. For case_a, the LLM only extracts free-text company identifiers (legal name or VAT number) via structured output; resolving an identifier into a `company_id` is done by a parameterized, code-written query, never a query the model itself constructs. For case_b, the LLM extracts data into a deliberately permissive intermediate schema, every field optional and unconstrained, which is then validated for real against `InsolvencyPredictionRequest`; a validation failure is recorded rather than raised, so the responder node can explain to the user what is missing or invalid.
-* **Justification:** Letting an LLM generate SQL from free text opens the door to injection-shaped risk that has nothing to do with a malicious user, an LLM producing a malformed or unsafe query is enough. Separating "what did the user say" (the LLM's job) from "is it enough, and is it valid" (`InsolvencyPredictionRequest`'s job) also prevents an LLM extraction quirk, such as defaulting an unstated qualitative claim ("heavily indebted") to an invented number, from silently masquerading as real user-supplied data feeding a financial prediction model.
-
-#### Single Source of Truth for the Decision Threshold
-
-* **Choice:** `predict` and `predict_from_raw_data` no longer accept a `threshold` parameter from the caller; both always score against `loaded_model.threshold`, read directly from the `selected_threshold` MLflow param logged on the final training run (see `evaluation/plots.ipynb`) when the model bundle is loaded.
-* **Justification:** With `threshold` as a separate caller-supplied argument, nothing prevented a prediction from being scored against a threshold inconsistent with the one the model was actually tuned against. Centralizing it inside the loaded model bundle removes that possibility entirely, at the cost of `load_model` failing fast if a run has no threshold logged, a deliberate trade-off, given a run without one isn't ready to serve predictions in the first place.
-
-#### Documentation Extraction via AST/YAML, Never Import
-
-* **Choice:** `extract_docs.py` reads every Python docstring and dbt model/column description directly from source text (`ast` for `.py` files, `yaml` for `schema.yml`), rather than importing project modules to read `__doc__` via `inspect`.
-* **Justification:** Several modules open real side effects at import time (e.g. a database connection) or pull in heavy dependencies (PyTorch, XGBoost) not needed just to read a docstring; parsing source text avoids triggering any of that.
-
-#### Idempotent RAG Ingestion
-
-* **Choice:** `ingest.py` deletes and recreates the ChromaDB collection on every run, rather than only upserting new chunks into it.
-* **Justification:** `upsert` alone would leave a chunk orphaned in the index forever once its source (a deleted README section, a removed docstring) disappears. Starting from a clean collection each time means re-running ingestion after any documentation change is always safe, with no manual cleanup step.
-
-#### Format-Matched Context Injection in the Responder
-
-* **Choice:** The responder node formats the material it injects into the prompt differently depending on its shape, not uniformly as plain text: prediction results/errors (case_a, case_b) are minimal JSON wrapped in an XML-style tag, while retrieved context (rag) is plain text in its own tag.
-* **Justification:** Prediction results are multi-field numeric records the model must cite precisely without mixing up figures across companies or fields, exactly the case where a keyed format outperforms prose; retrieved context is prose the model should synthesize freely, where a keyed format would only add syntactic noise. Prompt format affects an LLM's reasoning mode, not just output structure, so the format is chosen per material rather than fixed for the whole prompt.
-
-#### Retry on a Known Groq/gpt-oss Flakiness
-
-* **Choice:** `agent/utils/llm_utils.py`'s `invoke_with_retry` retries a structured-output LLM call when Groq returns `tool_use_failed` (`openai/gpt-oss-*` intermittently responding with plain text instead of the required tool call under `tool_choice="required"`), rather than letting it crash the graph. The judge node uses a higher retry cap than the router/extractor, given its longer, denser prompts; if every attempt is still exhausted, the response is treated as approved by default (logged as a warning) rather than surfacing a raw error to the user.
-* **Justification:** This failure is documented independently across Groq's own community forum and the LangChain/pydantic-ai issue trackers as a provider/model-level flakiness, not a sign of a malformed prompt or schema, so a short retry resolves it in practice. Defaulting to approved on total exhaustion, rather than failing the whole request, reflects that the user has otherwise already received a valid response from the responder in every case observed, an unverifiable verdict is a worse outcome for them than an unverified one.
-
-#### Feature Order and Presence Validated Against the Model Itself
-
-* **Choice:** `score_features` reorders the scored DataFrame's columns to `loaded_model.model.feature_names_in_` before calling `predict_proba`, instead of relying on `retrieve_company_data`'s query or `predict_from_raw_data`'s hand-written dict to already match the order used in training.
-* **Justification:** XGBoost's `inplace_predict` validates column order, not just column names, and neither entry point's own construction order was guaranteed to match it — reading the order from the model itself removes that assumption entirely. Exercising the pipeline against the real database and model (rather than only mocked tests) surfaced two related gaps fixed the same way: `retrieve_company_data` was including the target column (`is_insolvent`) among the model's input features, and `predict_from_raw_data` never derived `year`/`quarter`/`month` at all, despite them being required training features.
-
-#### Canonical Company Name Propagated Through Predictions
-
-* **Choice:** `predict` reads the company's canonical `legal_name` from the scored DataFrame's index and includes it in `PredictionResult` as `company_name` (`None` for case_b, which has no database record to draw one from). The responder's prompt material also includes a `company_identifiers` block with the user's original free-text wording.
-* **Justification:** Without this, the responder had only an opaque `company_id` to work with and no textual link back to the name the user actually asked about — a gap invisible in isolated testing but immediately apparent the first time a real request paraphrased a company's name rather than repeating it verbatim.
-
-#### API Surface Kept Deliberately Small
-
-* **Choice:** The API exposes only two endpoint areas: `POST /chat`, routed through the agent, and two direct prediction endpoints (`POST /predict/ad-hoc`, `POST /predict/company`) that call directly into `ml.inference.predictor`. It exposes no endpoint to query the OLTP database or the OLAP star schema directly.
-* **Justification:** The database and the datamart are implementation details of how the agent and the model produce an answer, not something an end user needs, or should be able to, query on their own. Keeping the public surface limited to a conversational entry point and a direct scoring path avoids turning a portfolio inference service into a general-purpose database query API, which was never the goal.
-
-#### `/predict/ad-hoc` and `/predict/company` as Separate Endpoints, Not One Branching Internally
-
-* **Choice:** The direct prediction area exposes two distinct routes, `POST /predict/ad-hoc` (a fully-specified profile not in the database, `InsolvencyPredictionRequest` + `predict_from_raw_data`) and `POST /predict/company` (an existing company, `ExistingCompanyRequest` + `predict`), rather than a single `/predict` endpoint that inspects the request body to decide which case applies.
-* **Justification:** This mirrors the case_a/case_b distinction already used throughout the rest of the project (extractor, predictor, SHAP), rather than reintroducing it as an implicit branch at the HTTP layer. The two also fail differently in ways that are easier to reason about as separate routes: `/predict/company` can 404 on an identifier that resolves to nothing, a case that does not exist for `/predict/ad-hoc`, which is always a valid, if hypothetical, scoring request as long as it passes Pydantic validation.
-
-#### No Internal Database ID Ever Exposed to the Client
-
-* **Choice:** `POST /predict/company` accepts a company's legal name or VAT number as `identifier`, resolved to a `company_id` server-side via a parameterized query; that `company_id` is never returned in `PredictionResponse`, which carries `company_name` but not `company_id`.
-* **Justification:** A surrogate database key is an implementation detail of the star schema, not a piece of information the caller supplied or has any independent way to obtain, since no endpoint exists to look one up. Returning it would expose an internal identifier with no actionable use on the client side, the same reasoning that kept the OLTP/OLAP schema unexposed in the first place.
-
-#### Agent and Model Built Once at Startup, Not Per-Request
-
-* **Choice:** `agent.graph.build_agent()` and `ml.inference.model_loader.load_model()` are never called inside a request handler. The compiled agent is built once in FastAPI's `lifespan` and stored on `app.state.agent`; the loaded model bundle is built once via `@cache` on `api.dependencies.get_loaded_model`, mirroring the same pattern already used by the agent's own predictor node.
-* **Justification:** Both are expensive to construct, wiring together every node of the graph, or loading a full MLflow model bundle. Rebuilding either on every request would add unnecessary latency and load to every single call; building once and reusing the result across requests, injected via `Depends`, keeps that cost off the request path entirely.
-
-#### Per-Session Conversation History, Not a Global List
-
-* **Choice:** `api/session_store.py` keys conversation history by a client-supplied `session_id` (sent via a `Session-Id` header, generated server-side and echoed back when the client sends none), rather than keeping a single global list the way the CLI (`agent/run_agent.py`) does.
-* **Justification:** The CLI's single in-memory list is only valid because it serves one user, one conversation, at a time. An HTTP server is stateless between requests and may serve several concurrent users (multiple browser tabs against the same Streamlit instance, for example), so history has to be isolated per conversation rather than shared globally. Storage is a plain in-memory dict rather than a persistent store: state is lost on restart and isn't shared across replicas, an accepted limitation for a no-cloud v1.
-
-#### Shared Company-Resolution Query, Not Duplicated Between the Agent and the API
-
-* **Choice:** The parameterized query that resolves a free-text company identifier (legal name or VAT number) into a `company_id` lives in `utils/queries.py`, imported both by the agent's `extract_case_a` and by `POST /predict/company`, rather than being duplicated or imported by the API from `agent/nodes/`.
-* **Justification:** The two call sites need the exact same resolution logic, so duplicating it would risk the two drifting out of sync if the query ever changed. Importing it from `agent/nodes/` instead would couple the API to the agent's own node package for a single SQL constant, pulling in module-level dependencies (LLM prompts, LangChain imports) the API has no reason to depend on.
-
-#### The UI Only Exposes `/chat`, Never `/predict/*` Directly
-
-* **Choice:** `ui/app.py` talks to the API exclusively through `POST /chat` and `GET /chat/{session_id}/history`. It never calls `/predict/ad-hoc` or `/predict/company`.
-* **Justification:** Anyone with structured data ready for a direct prediction endpoint already knows how to make an HTTP call, documented above under Try the API; the UI's purpose is to make the conversational agent usable without a terminal, not to duplicate the direct prediction path behind a form.
-
-#### A Client-Side Conversation Registry, Not a Server-Side One
-
-* **Choice:** `ui/chat_registry.py` keeps a lightweight, `st.session_state`-backed index of the `session_id`s known to the current browser session, each with a short preview generated from its first user message, so the sidebar can list past conversations. Only the identifier and preview live here; the full message history is never duplicated client-side, and is instead read back from `GET /chat/{session_id}/history` whenever the user switches to a past conversation.
-* **Justification:** `api/session_store.py` is already the single source of truth for conversation history; keeping a second, client-side copy risks the two drifting apart (e.g. after a server restart, which clears server-side history but would leave stale messages behind client-side). Storage in `st.session_state` is scoped to a single browser tab and lost when it closes, the same in-memory, no-cloud limitation already accepted for `SessionStore` on the API side.
-
-#### `mlruns/` and `mlflow.db` Are Bind-Mounted, Not Baked Into the API Image
-
-* **Choice:** `docker-compose.yml` mounts the host's existing MLflow tracking DB and artifact store into the `api` container at the same relative path the API's `WORKDIR` expects, rather than copying them into the image at build time or retraining inside the container on every startup.
-* **Justification:** Producing them is a prerequisite of running the containerized stack, the same as filling in `.env`: `docker compose up` orchestrates the already-trained project, it doesn't (re)train it. Bind-mounting also means a freshly retrained model becomes visible to the API on a restart, without rebuilding the image, and keeps the (potentially large) artifacts out of the image itself.
-
-#### The Retry Loop Now Actually Feeds the Judge's Feedback Back In
-
-* **Choice:** `responder_node` reads `judge_verdict` on every call and, when it holds a rejection, injects its `reason` into the next attempt as an explicit `<correction_needed>` hint, rather than regenerating from the same prompt it used before.
-* **Justification:** Previously, only `graph.py` ever read `judge_verdict`, to decide whether to loop back to the responder at all — the responder itself never saw *why* the judge had rejected its answer, so every retry regenerated essentially the same response and was rejected again for the same reason, exhausting the retry budget and falling through to the fallback message even when the underlying issue was fixable. This was already the intent recorded in `JudgeVerdict`'s own docstring, just never wired up.
-
-#### Known Limitation: Cross-Lingual RAG Retrieval Is Unreliable
-
-* **Choice:** No workaround (e.g. translating the query before embedding it, or switching to a larger multilingual embedding model) has been implemented for this v1; the limitation is documented rather than patched around.
-* **Justification:** `all-MiniLM-L6-v2`, the local, CPU-only embedding model used for retrieval, was chosen for being free and requiring no network round-trip per query, at the cost of weaker cross-lingual alignment than a larger or API-hosted model would offer. In practice this means an Italian question about English-language project documentation (e.g. asking which ML model is used and how well it performs) can retrieve chunks with a much weaker semantic match than the same question asked in English, occasionally missing the relevant chunk entirely, an issue neither the responder's nor the judge's prompt can fix once the retriever has already returned the wrong context to work with. A larger or hosted multilingual embedding model would very likely resolve this, at the cost of the constraints that led to the current choice in the first place.
-
-#### One `Makefile` Command Covers the Full Rebuild, Not a Sequence the User Has to Remember
-
-* **Choice:** `make software` (restore from DVC) and `make software_alternative` (re-seed from scratch) chain every step, migrations through bringing up the containerized stack, into a single command, rather than documenting a sequence of commands the user has to run in order and get right.
-* **Justification:** Reconstructing the project from a clean clone touches several independent tools (Alembic, DVC, dbt, MLflow, the RAG index, Docker Compose), each with its own prerequisites and ordering constraints; a single entry point per rebuild path removes the chance of a step being skipped or run out of order, and gives the two realistic starting points (already-tracked data vs. regenerating it from scratch) explicit, separate names instead of leaving the choice implicit in which commands happen to be run.
-
-#### Postgres Readiness Is Actively Polled, Not Assumed
-
-* **Choice:** Before running migrations, the pipeline polls `pg_isready` against the `postgres-db` container in a loop instead of assuming the database is ready as soon as `docker compose up -d postgres-db` returns.
-* **Justification:** A freshly created volume takes a few seconds to finish Postgres's own initialization, and Compose's `depends_on` only waits for the container process to have started, not for Postgres inside it to actually be accepting connections, running migrations immediately after start-up intermittently raced against that initialization and failed with a connection error. Polling for actual readiness removes that race instead of papering over it with a fixed sleep that would either be too short on a slower machine or waste time on a faster one.
-
----
-
-## 📊 Results
-
-**XGBoost is the production model**, chosen after benchmarking it against a Logistic Regression baseline and a PyTorch MLP on the same final holdout test set (never seen during training, cross-validation, or hyperparameter tuning), each evaluated at its own F2-optimal decision threshold:
-
-| Model                          | AUC-ROC          | AUC-PR           | Precision        | Recall           | F1               |
-| ------------------------------ | ---------------- | ---------------- | ---------------- | ---------------- | ---------------- |
-| Baseline (Logistic Regression) | 0.8742           | 0.5026           | 0.3911           | 0.9578           | 0.5555           |
-| MLP (PyTorch)                  | 0.8890           | 0.6030           | 0.3838           | 1.0000           | 0.5547           |
-| **XGBoost**              | **0.9198** | **0.6951** | **0.4351** | **0.9794** | **0.6026** |
-
-XGBoost is the strongest model on every metric except recall, where the MLP reaches a perfect 1.0. This is not attributable to a well-chosen decision threshold, the same result holds regardless of the threshold used, suggesting the MLP's predicted probabilities are clustered in a narrow, mostly-high range rather than genuinely separating the two classes. Combined with its lower AUC-ROC and AUC-PR, this points to weaker discrimination overall rather than superior performance. XGBoost is the model served in production, consistent with it being the only model family benchmarked and explained in depth (see the SHAP section below and `ml/evaluation/plots.ipynb`).
 
 ---
 
@@ -791,12 +570,207 @@ insolvency_prediction_project/
 ├── .python-version
 ├── alembic.ini
 ├── config.py
-├── docker-compose.yml
 ├── Dockerfile.api
 ├── Dockerfile.ui
+├── docker-compose.yml
 ├── LICENSE
 ├── Makefile
 ├── pyproject.toml
 ├── README.md
 └── uv.lock
 ```
+
+---
+
+## 📈 Pipeline Highlights & Implementation Details
+
+#### 1. Robust Data Ingestion & Semantic Modeling
+* Modeled transactional entities using clean Object-Relational Mapping (SQLAlchemy) to enforce structural constraints at the application layer.
+* Decoupled structural evolutions using database migration tracking (Alembic) to avoid manual, destructive changes on raw schemas.
+* Orchestrated data warehouse compilation using dbt Core, shifting processing from raw ledgers into a fully optimized star schema layout (`fct_company_credit_profile`), with embedded enterprise data-quality constraints (`unique`, `not_null`, `relationships`, plus custom leakage and temporal-correctness tests) running at the analytical border.
+
+#### 2. Multi-Model Benchmark & MLOps Governance
+To solve the severe class imbalance typical of credit default data, the orchestration engine isolates and profiles three alternative algorithms:
+* **Baseline Model:** Logistic Regression optimized via cost-sensitive class weighting.
+* **Tree-based Ensemble:** Optimized XGBoost engines tuned for highly skewed feature split distributions, leveraging native handling of missing values.
+* **Deep Learning Neural Network:** A custom PyTorch Multi-Layer Perceptron (funnel architecture with dropout regularization) trained with a class-weighted `BCEWithLogitsLoss` and `AdamW`, exposing a `fit`/`predict_proba` interface so the training orchestrator treats it identically to the scikit-learn-based models.
+* **Model-Agnostic Orchestration:** A structural `Estimator` protocol (`fit`/`predict_proba`) — rather than a shared base class — lets the training pipeline remain entirely unaware of whether a given model is scikit-learn- or PyTorch-based. The orchestrator additionally inspects each model's `fit` signature at runtime to opportunistically pass a validation split for per-epoch monitoring where supported (the PyTorch model), without requiring every model family to accept it.
+* **Imbalance Strategy:** Class weighting is applied consistently across all three model families, combined with decision threshold tuning at evaluation time to align the precision/recall trade-off with the real-world cost asymmetry of missed insolvencies. The simulated dataset carries a substantial positive rate (~16%), measured directly from the populated star schema rather than assumed, and treated as a genuine benchmark condition rather than an artificially rebalanced one.
+* **Governance:** Operational artifacts, model weights, validation graphs, and metrics (Precision-Recall AUC, ROC curves, confusion matrix counts) are automatically serialized and registered into **MLflow**, with cross-validation runs nested under a parent run per model family and a size-weighted aggregation of per-fold metrics. The fitted preprocessing artifacts (encoder, scaler) are persisted alongside each final model, and per-epoch training/validation loss is logged for the neural network to support manual early-stopping analysis. Raw datasets are locked and version-controlled via **DVC**.
+* **Data Quality Discovery:** While validating the ML feature set end-to-end, a bug was traced to the `int_billing_trailing_90d` dbt model: the 90-day trailing window used to select candidate invoices excluded unpaid invoices right before their days-past-due value could reach the 90-day insolvency threshold, silently producing zero labeled insolvencies across the entire mart. The window was widened to 120 days — the minimum needed to reliably capture the threshold under monthly snapshots — without altering the underlying days-past-due calculation.
+* **Near-Leakage Feature Removal:** An unexpectedly high test-set AUC-PR (0.988 for XGBoost) prompted a targeted investigation rather than acceptance at face value. Removing `avg_dpd_trailing_90d` from the imported data from the central fact of the star schema alone dropped AUC-PR to 0.691 (XGBoost), 0.633 (baseline), and 0.499 (MLP) - a consistent, comparable drop across all three model families - confirming that a single feature, strongly correlated (Pearson 0.80) with the deterministic label-generating column `max_dpd_trailing_90d`, was dominating the shared predictive signal rather than the model families learning it independently. The feature was removed from the training set entirely, trading a superficially higher score for a result that reflects the model's actual ability to generalize from independent risk signals.
+* **Expected Test Warnings:** The test suite intentionally exercises a validation fold with no positive examples, a realistic edge case under severe class imbalance. This triggers `UndefinedMetricWarning`/`UserWarning` from scikit-learn's AUC-ROC and AUC-PR implementations, which are mathematically undefined when only one class is present. These warnings are expected and left unsuppressed by design, so they remain visible as a reminder of the underlying edge case rather than being silently filtered out.
+
+#### 3. Explainable AI & Agentic Conversational Loops
+* Instead of rendering opaque black-box credit predictions, the pipeline processes validation instances through **SHAP** (Shapley Additive exPlanations) to map exact feature attributions for every prediction.
+* Conversational interaction is driven by a stateful **LangGraph** engine, built router-first: every request is classified into exactly one of four routes before any downstream work happens, rather than always retrieving a company profile or querying the vector store "just in case." A request about a specific or hypothetical company retrieves its credit profile and prediction with full SHAP attributions; a documentation or methodology question instead retrieves contextual text chunks from a **ChromaDB** vector store; a general conversational message skips both entirely.
+* To secure enterprise responses, an autonomous **LLM-as-a-Judge** node, hosted separately from the response-generating model, scores the generated reply against the exact material it was based on to catch and mitigate hallucinations before the payload reaches the UI, within a bounded retry loop that falls back to a fixed message rather than looping indefinitely.
+
+#### 4. Inference Layer
+* Serving reuses the exact fitted encoder and scaler produced during training — loaded together with the model from the same MLflow run — instead of refitting preprocessing transformations on new data, preventing training/serving skew.
+* Scoring an existing company retrieves its most recent star schema snapshot through a parameterized query (never string-interpolated), keeping the same feature-selection logic used during training as the single source of truth.
+* Scoring a company not present in the database (arbitrary user/agent-supplied data) is validated through a dedicated Pydantic schema before it reaches the model, see the SHAP-driven validation entry under Architectural Decisions below, then shares the same encoding, scoring, and SHAP explanation path as an existing company.
+
+#### 5. Serving Layer
+* The agent and the model are exposed over HTTP through a REST API, sitting alongside the existing command-line interface rather than replacing it: a conversational endpoint forwards free-text messages through the full agent graph, while two direct endpoints call the model without going through the LLM at all, for callers who already have structured data or want a deterministic, low-latency path.
+* Every request and response body is validated through dedicated schemas, the same discipline already applied to the agent's own internal state, and the API's auto-generated interactive documentation is built directly from those same schemas, kept accurate by construction rather than maintained separately by hand.
+* Conversations are tracked per client-supplied session, isolating concurrent users from one another, while the agent and the loaded model are built once at startup and reused across every request rather than reconstructed on each call.
+* A terminal-free interface consumes the conversational endpoint alone, rendering the agent's Markdown-formatted answers properly instead of as raw text, and keeps a lightweight, client-side index of past conversations for its own sidebar, always reading the underlying messages back from the server rather than keeping a second, independent copy of them.
+
+---
+
+## 🧠 Architectural Decisions & Rationale
+
+#### Modern Python Tooling (Python 3.13 + `uv` + Ruff)
+* **Choice:** Moving away from standard `pip`/`venv` and selecting `uv` as the exclusive dependency manager alongside Ruff for quality gating.
+* **Justification:** `uv` provides blazing-fast environment synchronization and strict, deterministic lockfile management, eliminating the "it works on my machine" anti-pattern in production containers. Ruff guarantees lightning-fast code linting and formatting compliance natively during pre-commit and CI stages.
+
+#### Complete Isolation of OLTP and OLAP Store
+* **Choice:** Running an analytical dbt layer over isolated analytical tables instead of running feature engineering queries straight against live application tables.
+* **Justification:** Aggregation queries on production ledgers introduce lock contention and severely degrade user experience. Isolating data access ensures transactional low-latency uptime while enabling heavy-duty relational processing inside an optimized data warehouse.
+
+#### Feature Engineering Delegated to the Analytical Layer
+* **Choice:** Performing the heavy feature engineering (trailing-window aggregations, as-of temporal joins, SCD2 resolution) inside dbt/SQL, keeping the Python ML layer focused on feature *preparation* (encoding, imputation, scaling) rather than feature *engineering*.
+* **Justification:** Keeping a single source of truth for business logic in SQL/dbt — already covered by dedicated data-quality and leakage tests — avoids duplicating transformation logic across languages and reduces the risk of training/serving skew.
+
+#### Temporal Integrity as a First-Class Constraint
+* **Choice:** Treating the feature mart as panel data (one row per company per snapshot date) and designing every split, validation, and dimension-resolution strategy around a point-in-time cutoff instead of random shuffling.
+* **Justification:** Credit risk data is inherently sequential. A random split would leak future information into training and produce metrics that look strong but collapse in production; SCD Type 2 dimensions and as-of joins ensure that every feature reflects only information that was actually available at the snapshot date.
+
+#### F2-Optimal Decision Threshold per Model Family
+* **Choice:** Instead of using the default 0.5 probability cutoff to convert predicted probabilities into a binary class, each model family's decision threshold is separately tuned by maximizing the F2-score on the aggregated cross-validation folds, then wired into the final training run.
+* **Justification:** Under substantial class imbalance (~16% positive rate), 0.5 is an arbitrary cutoff with no particular statistical justification, and each model family produces probabilities on a different scale (e.g. the neural network's optimal threshold is far below 0.5). F2 weighs recall more heavily than precision, appropriate for insolvency prediction where missing an actual default is costlier than a false alarm; tuning it per model family, rather than sharing one global threshold, respects each family's own calibration instead of forcing a shared assumption onto all three.
+
+#### Manual Hyperparameter Tuning via Shell Scripts
+* **Choice:** Hyperparameter search is performed as a manual grid search driven by dedicated shell scripts, one per model family (plus a narrower `fine_tune_xgb.sh` second pass for XGBoost, once the full grid pointed to a promising region). Each script temporarily patches the relevant defaults via `sed`, runs the training pipeline for that combination, and appends the resulting cross-validation metrics to a CSV, keeping full per-run logs for inspection. The original files are always restored on exit (success, failure, or interruption).
+* **Justification:** With only 2-3 hyperparameters explored per model family, a manual grid search keeps the process reproducible and inspectable without adding a new dependency or learning curve. A shared quirk had to be worked around: `setup_logging()` registers both a plain `StreamHandler` and Logfire's handler, and Logfire also echoes the same line to stdout independently, so each log line is captured twice, the parsing step takes only the first occurrence to avoid corrupting the results CSV.
+
+#### SHAP-Driven Input Validation for Ad Hoc Predictions
+* **Choice:** XGBoost is the only model family explained via SHAP (`ml/evaluation/explainability.py`, built on `TreeExplainer`), since only the best-performing model is ever deployed, and prior benchmarking already pointed to XGBoost, investing explainability effort in the baseline or MLP would not translate into production value. That same SHAP analysis (see the beeswarm plot in `ml/evaluation/plots.ipynb`) directly drives which fields are required versus optional in the `InsolvencyPredictionRequest` Pydantic schema used to validate ad hoc predictions for companies not yet in the database: the two dominant features (`unpaid_ratio_trailing_90d`, `total_outstanding_debt`) are mandatory, while the rest are optional and left as NaN when omitted.
+* **Justification:** This ties the validation layer's strictness to actual, measured feature importance rather than an arbitrary judgment call about which fields "feel" necessary, and lets XGBoost's native missing-value handling (the model is trained with `handle_nan=False`) degrade gracefully on the fields it relies on least.
+
+#### Informative Missing Values over Blind Imputation or Row Dropping
+* **Choice:** Nullable feature groups (financial statement ratios, login activity, support ticket satisfaction) are handled with a per-group binary flag marking whether the value was observed, followed by a group-specific fallback constant, rather than dropping incomplete rows or imputing with a statistical average.
+* **Justification:** A diagnostic query showed that a naive `dropna` would have discarded roughly 77% of the dataset, disproportionately removing companies with no recent support tickets — a systematic selection bias, not a random one. The missingness itself is informative (e.g. no resolved tickets recently, no published financial statement yet), so it is preserved as a signal instead of being discarded or disguised as an invented average.
+
+#### Size-Weighted Cross-Validation Metric Aggregation
+* **Choice:** Aggregating per-fold validation metrics with a mean weighted by each fold's validation set size, while confusion matrix counts (true/false positives/negatives) are summed rather than averaged.
+* **Justification:** `TimeSeriesSplit`'s expanding window produces folds of unequal size, so an unweighted mean would give a small, less reliable early fold the same influence as a large, more reliable later one. Confusion matrix counts are absolute quantities tied to fold size; averaging them (weighted or not) yields a number with no clear interpretation, while summing preserves their meaning as a total across the full cross-validation run, since each row is scored exactly once.
+
+#### Structural Typing over a Shared Model Base Class
+* **Choice:** Defining an `Estimator` structural protocol (`fit`/`predict_proba`) that scikit-learn estimators and the custom PyTorch wrapper both satisfy implicitly, rather than forcing a shared base class or inheritance hierarchy across model families.
+* **Justification:** scikit-learn and PyTorch models have fundamentally different internals (a declarative `.fit()` call versus a manual training loop); requiring a common base class would either constrain scikit-learn's own class hierarchy or force an artificial wrapper on it. Structural typing lets the training orchestrator depend only on the shape of the interface, keeping both model families and the orchestrator itself decoupled from one another.
+
+#### Rigid Perimetric Validation over Dict Passing
+* **Choice:** Utilizing **Pydantic v2** models to validate every incoming and outgoing payload across FastAPI endpoints and LangGraph state nodes.
+* **Justification:** Untyped dictionary structures cause fragile software architectures. Applying the *fail-fast* principle at the application boundary guarantees that bad data types or unauthorized input structures are dropped instantly, keeping the pipeline secure and debugging predictable.
+
+#### State Machine Graph Architectures over Sequential Prompt Chains
+* **Choice:** Building agent logic with LangGraph instead of linear pipeline chains.
+* **Justification:** Financial workflows are inherently cyclical, requiring validation loops, user clarification, and data retrieval backtracking. LangGraph treats the conversation as a formal state machine, maintaining deterministic state consistency across complex, asynchronous reasoning steps.
+
+#### Router-First Agent Design
+* **Choice:** The agent's graph classifies every incoming request into one of four explicit routes (company-specific prediction, ad hoc prediction, documentation retrieval, or a direct conversational reply) before any downstream node runs, rather than always invoking retrieval "just in case" and falling back when nothing relevant comes back.
+* **Justification:** Retrieval is not free: every ChromaDB query adds latency and risks injecting irrelevant context into the prompt for requests that don't need it, such as a greeting or an out-of-scope question. An explicit router keeps each path in the graph doing only the work it actually needs, at the cost of depending on the router's own classification accuracy.
+
+#### Single Source of Truth for the Agent's Routing Type
+* **Choice:** The set of valid routes is defined once as a shared type, reused both by the schema constraining the router's structured LLM output and by the graph's own state, rather than duplicating the same set of literal values in both places.
+* **Justification:** The two schemas serve different purposes — one shapes what the LLM is allowed to return, the other is the graph's source of truth — but they must always agree on the same set of valid routes. Defining that set once and importing it in both places removes the possibility of the two drifting out of sync if a new route is ever added.
+
+#### Extraction, Not Query or Feature Generation
+* **Choice:** The extraction step of the agent never lets the LLM produce SQL or a ready-to-use feature set directly. For a request about a specific company, the LLM only extracts the free-text identifier mentioned (legal name or VAT number); resolving it into a database record is done by a parameterized, code-written query, never one the model itself constructs. For an ad hoc, hypothetical company, the LLM extracts data into a permissive intermediate representation, every field optional and unconstrained, which is then validated for real against the same schema used to validate any prediction request; a validation failure is reported to the user rather than silently discarded or guessed around.
+* **Justification:** Letting an LLM generate SQL from free text opens the door to injection risk that has nothing to do with a malicious user, a model producing a malformed or unsafe query is enough on its own. Separating what the user actually said from whether it is sufficient and valid also prevents an LLM extraction quirk, such as turning a vague qualitative claim into an invented number, from silently masquerading as real data feeding a financial prediction model.
+
+#### Single Source of Truth for the Decision Threshold
+* **Choice:** The prediction functions no longer accept a decision threshold from the caller; every prediction is scored against the threshold selected during training for the served model, read directly from the model's own tracked run when it is loaded.
+* **Justification:** With the threshold as a separate, caller-supplied argument, nothing prevented a prediction from being scored against a value inconsistent with the one the model was actually tuned against. Tying it to the loaded model itself removes that possibility entirely, at the cost of failing fast if a run has no threshold recorded, a deliberate trade-off, since a run without one isn't ready to serve predictions in the first place.
+
+#### Documentation Extraction Without Importing the Project
+* **Choice:** The project's own documentation, every Python docstring and every dbt model and column description, is read directly from source text rather than by importing the project's modules to inspect them at runtime.
+* **Justification:** Several modules open real side effects on import, such as a database connection, or pull in heavy machine learning dependencies not needed just to read a docstring. Reading source text directly avoids triggering any of that, so building the documentation index never risks side effects from the very modules it's documenting.
+
+#### Idempotent Documentation Indexing
+* **Choice:** The vector index backing the agent's documentation retrieval is cleared and rebuilt from scratch on every indexing run, rather than only adding newly found content to what's already there.
+* **Justification:** Only adding new content would leave outdated material in the index forever once its source, a deleted section, a removed docstring, disappears from the project. Rebuilding from a clean slate each time means the index can always be safely refreshed after a documentation or code change, with no manual cleanup step.
+
+#### Matching Prompt Format to the Kind of Material Being Injected
+* **Choice:** The response node formats the material it works from differently depending on what it is, not uniformly as plain text: prediction results are passed as compact, structured records, while retrieved documentation is passed as plain prose.
+* **Justification:** Prediction results are precise, multi-field numeric records the model must cite exactly without mixing up figures across companies or fields, exactly the case where a structured format outperforms prose. Retrieved documentation, by contrast, is prose the model should synthesize freely, where a structured format would only add noise. The format handed to a language model shapes how it reasons about the content, not just how that content looks, so the format is chosen to fit the material rather than applied uniformly.
+
+#### Retrying a Known Flakiness in the Hosted Model Provider
+* **Choice:** A call to the LLM that requires a structured, schema-constrained response is retried, with a higher retry allowance for the judge than for earlier steps, if the model responds with plain text instead of the required structured call. Once every attempt is exhausted, the response is treated as approved by default, logged as a notable event, rather than surfacing a raw error to the user.
+* **Justification:** This is a documented flakiness of the specific hosted model family in use under a strict structured-output requirement, not a sign of a malformed request, so a short retry resolves it in practice. Defaulting to approved after exhausting every attempt reflects that the user has, in every case observed, already received a valid response from the model before judging even begins; an unverifiable verdict is a worse outcome for them than an unverified one.
+
+#### Feature Order and Presence Checked Against the Model Itself
+* **Choice:** Before scoring, the feature set is reordered to match the exact column order the model was trained on, read directly from the model rather than assumed from how each entry point happens to construct its own data.
+* **Justification:** The underlying gradient-boosting library validates column order strictly, not just column names, and nothing else in the pipeline guaranteed the two would agree. Reading the order from the model itself removes that assumption entirely, rather than relying on it staying correct by convention.
+
+#### Canonical Company Name Carried Through the Prediction
+* **Choice:** A prediction for an existing company now carries its canonical legal name alongside its numeric result, and the response node also receives the company name or identifier as the user actually typed it.
+* **Justification:** Without this, a response could only refer to a company by an internal identifier, with no way to confirm which company that identifier actually corresponded to, an inconsistency invisible in isolated testing but immediately apparent the first time a real conversation referred to a company by a name that didn't match verbatim.
+
+#### A Deliberately Small API Surface
+* **Choice:** The API exposes only two areas: a conversational endpoint routed through the agent, and two direct prediction endpoints that call the model without going through the LLM at all. It exposes no endpoint to query the transactional database or the analytical warehouse directly.
+* **Justification:** The database and the datamart are implementation details of how the agent and the model arrive at an answer, not something an end user needs, or should be able to, query on their own. Keeping the public surface limited to a conversational entry point and a direct scoring path avoids turning a portfolio inference service into a general-purpose database query API, which was never the goal.
+
+#### Two Prediction Endpoints, Not One Branching Internally
+* **Choice:** Direct prediction is split into two distinct endpoints, one for a fully-specified profile not present in the database, and one for an existing company looked up by legal name or VAT number, rather than a single endpoint that inspects the request body to decide which case applies.
+* **Justification:** This mirrors the same existing-company/ad-hoc-data distinction already used throughout the rest of the project, rather than reintroducing it as an implicit branch at the HTTP layer. The two also fail differently in ways that are easier to reason about as separate endpoints: a lookup by name or VAT number can fail to resolve to any company, a case that simply doesn't exist for a fully ad hoc, hypothetical request, which is always valid as long as it passes schema validation.
+
+#### No Internal Database Identifier Ever Exposed to the Client
+* **Choice:** Looking up an existing company happens by legal name or VAT number, resolved to an internal database identifier entirely server-side; that identifier is never included in the response sent back to the client.
+* **Justification:** A surrogate database key is an implementation detail of the analytical warehouse, not a piece of information the caller supplied or has any independent way to obtain, since no endpoint exists to look one up in the first place. Returning it would expose an internal identifier with no actionable use on the client side, the same reasoning that kept the transactional and analytical schemas unexposed to begin with.
+
+#### The Agent and the Model Are Built Once, Not Per Request
+* **Choice:** Both the compiled agent graph and the loaded model bundle are built exactly once, at server startup, cached for the lifetime of the process, and reused across every request rather than rebuilt each time a request comes in.
+* **Justification:** Both are expensive to construct, one wires together every node of a multi-step graph, the other loads a full model bundle from the tracking backend. Rebuilding either on every request would add unnecessary latency and load to every single call; building once and reusing the result keeps that cost entirely off the request path.
+
+#### Conversation History Isolated per Session, Not Shared Globally
+* **Choice:** Conversation history is keyed by a client-supplied session identifier, generated server-side and handed back to the client on the very first message if none was sent, rather than kept as a single shared history the way the interactive command-line version of the agent does.
+* **Justification:** A single shared history is only valid for a tool that serves one user, one conversation, at a time. An HTTP server is stateless between requests and may serve several concurrent users at once, so history has to be isolated per conversation rather than shared globally. Storage is in-memory rather than persistent, an accepted limitation for a self-contained, no-cloud first version: state is lost on restart and isn't shared across multiple running instances.
+
+#### One Shared Company-Resolution Query, Not Duplicated
+* **Choice:** The parameterized query that resolves a free-text company identifier into a database record is defined once, in a shared location, and used both by the agent's own extraction step and by the API's direct lookup endpoint, rather than being duplicated between the two or having the API reach into the agent's own internals to reuse it.
+* **Justification:** Both call sites need the exact same resolution logic, so duplicating it would risk the two drifting out of sync if the query ever changed. Reaching into the agent's own module to reuse it instead would couple the API to internals, prompts, and dependencies it has no reason to depend on, for the sake of a single shared query.
+
+#### A Terminal-Free Interface That Only Talks to the Conversational Endpoint
+* **Choice:** The UI calls the conversational endpoint and its history-reading counterpart exclusively; it never calls either direct prediction endpoint.
+* **Justification:** Anyone with structured data ready for a direct prediction endpoint already knows how to make an HTTP call, documented above under Try the API. The interface's purpose is to make the conversational agent usable without a terminal, not to duplicate the direct prediction path behind a form.
+
+#### A Lightweight, Client-Side Conversation Index, Never a Second Copy of the History Itself
+* **Choice:** The interface keeps a small, session-scoped index of which past conversations exist and a short preview of each, so its sidebar can list them, but never stores the underlying messages themselves. Reopening a past conversation always re-reads its messages from the server rather than from a locally kept copy.
+* **Justification:** The server is already the single source of truth for conversation history; keeping a second, client-side copy risks the two drifting apart, for instance after a server restart, which clears server-side history but would leave stale messages behind on the client. The index itself lives only for the current browser session and is lost when it closes, the same in-memory, no-cloud limitation already accepted for conversation history on the server side.
+
+#### Trained Artifacts Are a Prerequisite of the Containerized Stack, Not Something It Produces
+* **Choice:** The model tracking database and artifact store already produced by training on the host are mounted into the API's container at startup, rather than baked into its image at build time or regenerated by training inside the container on every run.
+* **Justification:** Bringing up the containerized stack orchestrates an already-trained project, it doesn't train one from scratch, the same expectation already in place for its configuration. Mounting them rather than copying them in also means a freshly retrained model becomes visible on a restart without rebuilding anything, and keeps potentially large artifacts out of the image itself.
+
+#### A Correction Loop That Actually Corrects, Not Just Retries Blindly
+* **Choice:** When a response is rejected, the reason for that rejection is now fed back into the next attempt as an explicit correction hint, rather than the next attempt being generated exactly the same way as the one just rejected.
+* **Justification:** Only the graph's own routing logic ever looked at a rejection verdict before, to decide whether to loop back at all, the step that actually generates the response never saw why its previous attempt had failed. In practice this meant a retry regenerated essentially the same answer and was rejected again for the same reason, exhausting the retry budget and falling back to a generic message even when the underlying issue was easily fixable. Closing that loop was already the intent behind recording a reason alongside every verdict, just not yet wired through to where it could act on it.
+
+#### Known Limitation: Cross-Lingual Retrieval Is Unreliable
+* **Choice:** This limitation is documented rather than worked around for this first version — no query translation step and no switch to a larger multilingual embedding model has been added yet.
+* **Justification:** The embedding model behind documentation retrieval runs locally on CPU rather than through a hosted API, chosen for being free and adding no network round-trip per query, at the cost of weaker cross-lingual alignment than a larger or hosted model would offer. In practice, a question asked in Italian about English-language project documentation can retrieve much weaker matches than the same question asked in English, occasionally missing the relevant material entirely, an outcome no amount of instructing the response or verification step can fix once retrieval has already returned the wrong material to work with. A larger or hosted multilingual embedding model would very likely resolve this, at the cost of the constraints that led to the current choice in the first place.
+
+#### A Single Command Rebuilds the Whole Project, Rather Than a Sequence to Remember
+* **Choice:** Two end-to-end commands, one restoring data from version control and one regenerating it from scratch, chain every step of a full rebuild, migrations through bringing the containerized stack up, behind a single entry point each.
+* **Justification:** Rebuilding the project from a clean checkout touches several independent tools, each with its own prerequisites and ordering constraints; collapsing that into one command per realistic starting point removes the chance of a step being skipped or run out of order, rather than leaving that sequencing to be remembered and repeated correctly by hand.
+
+#### Database Readiness Is Actively Checked, Not Assumed
+* **Choice:** Before running migrations against a freshly started database container, the rebuild process actively polls it for readiness rather than assuming it can already accept connections as soon as the container itself has started.
+* **Justification:** A brand new database volume takes a few seconds to finish its own initialization, and simply waiting for a container to have started is not the same as the service inside it being ready, running migrations immediately after start-up intermittently raced against that initialization and failed. Polling for actual readiness removes that race outright, instead of masking it with a fixed delay that would be too short on a slower machine or wasted time on a faster one.
+
+---
+
+## 📊 Model Performance
+
+**XGBoost is the production model**, chosen after benchmarking it against a Logistic Regression baseline and a PyTorch MLP on the same final holdout test set (never seen during training, cross-validation, or hyperparameter tuning), each evaluated at its own F2-optimal decision threshold:
+
+| Model | AUC-ROC | AUC-PR | Precision | Recall | F1 |
+|---|---|---|---|---|---|
+| Baseline (Logistic Regression) | 0.8742 | 0.5026 | 0.3911 | 0.9578 | 0.5555 |
+| MLP (PyTorch) | 0.8890 | 0.6030 | 0.3838 | 1.0000 | 0.5547 |
+| **XGBoost** | **0.9198** | **0.6951** | **0.4351** | **0.9794** | **0.6026** |
+
+XGBoost is the strongest model on every metric except recall, where the MLP reaches a perfect 1.0. This is not attributable to a well-chosen decision threshold, the same result holds regardless of the threshold used, suggesting the MLP's predicted probabilities are clustered in a narrow, mostly-high range rather than genuinely separating the two classes. Combined with its lower AUC-ROC and AUC-PR, this points to weaker discrimination overall rather than superior performance. XGBoost is the model served in production, consistent with it being the only model family benchmarked and explained in depth (see the SHAP section below and `ml/evaluation/plots.ipynb`).
