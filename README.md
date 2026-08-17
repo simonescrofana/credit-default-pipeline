@@ -14,6 +14,7 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 4. **Explainable AI (xAI) Module:** Interpretability extraction utilizing SHAP to ensure credit scoring compliance and transparency.
 5. **Generative AI Layer:** An agent system built via LangGraph acting as an autonomous financial analyst, querying a ChromaDB vector store, running local inference, and validated by an LLM-as-a-Judge node.
 6. **Application & Serving Layer:** A FastAPI backend exposing validated REST endpoints for predictions and chat interactions, paired with a Streamlit interface acting as a live, interactive demo of the full pipeline.
+7. **Infrastructure Layer:** The containerized stack provisioned on managed AWS infrastructure via Terraform, replacing local execution with a running, publicly reachable deployment.
 
 ---
 
@@ -202,7 +203,7 @@ It opens at [`http://localhost:8501`](http://localhost:8501) by default.
 
 ## 🛠️ Tech Stack
 
-* **Infrastructure & DevOps:** Docker, Docker Compose, GitHub Actions (CI)
+* **Infrastructure & DevOps:** Docker, Docker Compose, GitHub Actions (CI), Terraform, AWS (RDS, S3, ECR, ECS/Fargate, ALB)
 * **Environment & Package Management:** Python, uv
 * **Data Engineering & Storage:** PostgreSQL, SQLAlchemy, Alembic, dbt Core
 * **Data Versioning:** DVC
@@ -398,6 +399,10 @@ insolvency_prediction_project/
 │       ├── credit-default-DFM.sql
 │       ├── credit-default-star-schema.sql
 │       └── database_structure.sql
+├── infra/
+│   ├── .terraform.lock.hcl
+│   ├── provider.tf
+│   └── variables.tf
 ├── ml/
 │   ├── dataset/
 │   │   ├── __init__.py
@@ -760,6 +765,18 @@ To solve the severe class imbalance typical of credit default data, the orchestr
 #### Database Readiness Is Actively Checked, Not Assumed
 * **Choice:** Before running migrations against a freshly started database container, the rebuild process actively polls it for readiness rather than assuming it can already accept connections as soon as the container itself has started.
 * **Justification:** A brand new database volume takes a few seconds to finish its own initialization, and simply waiting for a container to have started is not the same as the service inside it being ready, running migrations immediately after start-up intermittently raced against that initialization and failed. Polling for actual readiness removes that race outright, instead of masking it with a fixed delay that would be too short on a slower machine or wasted time on a faster one.
+
+#### Infrastructure Defined Declaratively, Not Provisioned by Hand
+* **Choice:** AWS infrastructure is defined in Terraform configuration files rather than created through the AWS Console or a sequence of CLI commands.
+* **Justification:** A declarative definition means the entire stack can be recreated or torn down deterministically without manually tracking which resources were created, in which order, or with which configuration. This is particularly relevant for a deployment intended to be dismantled once no longer needed, rather than kept running indefinitely.
+
+#### A Single AWS Region for the Whole Stack
+* **Choice:** Every AWS resource is provisioned in a single region, `us-east-1`, rather than the region geographically closest to the project's operator.
+* **Justification:** For a low-budget, non-production deployment, broader tutorial and documentation coverage and more mature service/pricing availability outweigh the marginal latency difference a closer region would offer, which is irrelevant for occasional, non-production traffic.
+
+#### A Reduced Data Subset in the Deployed Database, Not the Full Simulated Dataset
+* **Choice:** The database backing this deployment holds a reduced subset of the simulated data, sufficient to populate a realistic star schema, rather than the full multi-million-row dataset the local pipeline is capable of generating.
+* **Justification:** Both the production model and the agent consume feature aggregates from the star schema via SQL queries, never the raw transactional rows directly, so a full-scale dataset would add storage cost and populate time without adding anything the deployed system actually uses.
 
 ---
 
