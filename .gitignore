@@ -233,3 +233,12 @@ ml/tuning/logs/*
 
 # VectorDB data
 agent/data/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl.tmp
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
