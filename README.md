@@ -217,7 +217,7 @@ It opens at [`http://localhost:8501`](http://localhost:8501) by default.
 
 ---
 
-## 📂 Project Structure (up to this moment)
+## 📂 Project Structure
 
 ```text
 insolvency_prediction_project/
