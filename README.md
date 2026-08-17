@@ -402,7 +402,9 @@ insolvency_prediction_project/
 ├── infra/
 │   ├── .terraform.lock.hcl
 │   ├── provider.tf
-│   └── variables.tf
+│   ├── security-groups.tf
+│   ├── variables.tf
+│   └── vpc.tf
 ├── ml/
 │   ├── dataset/
 │   │   ├── __init__.py
@@ -777,6 +779,14 @@ To solve the severe class imbalance typical of credit default data, the orchestr
 #### A Reduced Data Subset in the Deployed Database, Not the Full Simulated Dataset
 * **Choice:** The database backing this deployment holds a reduced subset of the simulated data, sufficient to populate a realistic star schema, rather than the full multi-million-row dataset the local pipeline is capable of generating.
 * **Justification:** Both the production model and the agent consume feature aggregates from the star schema via SQL queries, never the raw transactional rows directly, so a full-scale dataset would add storage cost and populate time without adding anything the deployed system actually uses.
+
+#### A Dedicated VPC, Not the Account's Default One
+* **Choice:** Networking is provisioned as a purpose-built VPC with explicit public and private subnets, rather than relying on the AWS account's default VPC.
+* **Justification:** A default VPC typically offers only public subnets. A dedicated VPC is what makes a genuine public/private split possible in the first place, keeping the database out of reach of the internet by construction rather than by convention.
+
+#### Network Access Enforced Through a Security Group Chain
+* **Choice:** The load balancer, the application containers, and the database each have their own security group, and each accepts inbound traffic only from the security group immediately before it in the request path, rather than a single shared security group or broad IP-based rules.
+* **Justification:** This keeps each hop in the request path independently auditable and means the database has no network path to the internet at all, regardless of what happens at the load balancer or application layer.
 
 ---
 
