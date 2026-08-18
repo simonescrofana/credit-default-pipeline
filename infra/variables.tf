@@ -9,3 +9,9 @@ variable "aws_region" {
   type        = string
   default     = "us-east-1"
 }
+
+variable "db_snapshot_identifier" {
+  description = "Identifier of a DB snapshot to restore the database from. Leave empty to create a fresh, empty database instead."
+  type        = string
+  default     = ""
+}
