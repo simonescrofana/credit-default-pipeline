@@ -203,7 +203,7 @@ It opens at [`http://localhost:8501`](http://localhost:8501) by default.
 
 ## 🛠️ Tech Stack
 
-* **Infrastructure & DevOps:** Docker, Docker Compose, GitHub Actions (CI), Terraform, AWS (RDS, S3, ECR, ECS/Fargate, ALB)
+* **Infrastructure & DevOps:** Docker, Docker Compose, GitHub Actions (CI), Terraform, AWS (RDS, ECR, ECS/Fargate, ALB)
 * **Environment & Package Management:** Python, uv
 * **Data Engineering & Storage:** PostgreSQL, SQLAlchemy, Alembic, dbt Core
 * **Data Versioning:** DVC
@@ -404,9 +404,10 @@ insolvency_prediction_project/
 │   ├── alb.tf
 │   ├── ecr.tf
 │   ├── ecs.tf
+│   ├── migration.tf
+│   ├── outputs.tf
 │   ├── provider.tf
 │   ├── rds.tf
-│   ├── s3.tf
 │   ├── security-groups.tf
 │   ├── variables.tf
 │   └── vpc.tf
@@ -575,6 +576,7 @@ insolvency_prediction_project/
 │   ├── logging_utils.py
 │   ├── queries.py
 │   └── timezone_utils.py
+├── .dockerignore
 ├── .dvcignore
 ├── .env
 ├── .env.example
@@ -583,6 +585,7 @@ insolvency_prediction_project/
 ├── alembic.ini
 ├── config.py
 ├── Dockerfile.api
+├── Dockerfile.migration
 ├── Dockerfile.ui
 ├── docker-compose.yml
 ├── LICENSE
@@ -796,6 +799,22 @@ To solve the severe class imbalance typical of credit default data, the orchestr
 #### Container Images Built Once, Consumed by the Running Deployment
 * **Choice:** Container images are pushed to a dedicated registry (ECR) rather than built directly on the machine running the containers.
 * **Justification:** This is what turns the build step into the actual hinge between having code and having a running deployment: the container orchestrator pulls a specific, already-built image rather than rebuilding from source on every start, so what is running is always exactly what was pushed.
+
+#### The Image Registry Sits Outside the Regular Teardown Cycle
+* **Choice:** The container registry and the images pushed to it are managed outside the usual provision/teardown cycle applied to the rest of the deployment, rather than being torn down and recreated alongside everything else.
+* **Justification:** Rebuilding and repushing every image from a developer machine before the deployment can serve traffic again would be a meaningful, avoidable delay every single time the rest of the stack is brought back up, keeping the registry persistent means only the underlying infrastructure needs to be provisioned again, not the application artifacts themselves.
+
+#### Trained Artifacts Bundled Into the Image, Not Fetched From Object Storage
+* **Choice:** The trained model and its accompanying tracking metadata are copied directly into the API's container image at build time, rather than fetched from object storage when the container starts.
+* **Justification:** The model-loading code already resolves these artifacts through a local backend by default, with no code path that talks to object storage directly; bundling them into the image mirrors that same local behavior instead of introducing a new one, and avoids provisioning a storage service that would otherwise sit unused at runtime.
+
+#### A Separate, One-Off Task for Seeding the Database
+* **Choice:** Populating the database from its seed dataset is handled by a dedicated, purpose-built container image and run manually, once, as a standalone task, rather than folded into one of the long-running application images or run automatically as part of every deployment.
+* **Justification:** The application images intentionally include only what they need to serve traffic; seeding involves separate tooling with its own dependencies that the running application never touches. Keeping it as an explicit, manually triggered one-off avoids both bloating the application images and re-running a multi-step, non-trivial population process on every deployment when the database is already populated or being restored from a snapshot.
+
+#### External Credentials Injected at Runtime, Never Part of the Image
+* **Choice:** Credentials the seeding task needs for an external data source are stored in a secrets manager and injected into the container as environment variables when it starts, rather than being written into the image at build time.
+* **Justification:** Anything baked into an image layer is effectively permanent and retrievable by anyone with access to the registry, even after being "removed" in a later layer. Injecting credentials at runtime instead means the image itself carries nothing sensitive, and rotating or revoking them never requires rebuilding or repushing anything.
 
 #### `destroy` Must Never Fail
 * **Choice:** Every piece of this deployment is configured so it can be torn down at any time, unconditionally, even if it currently holds pushed container images or a running database.

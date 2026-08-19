@@ -1,0 +1,41 @@
+# One-off image used to populate RDS from a clean state: applies Alembic
+# migrations, pulls the seed dataset from the DVC remote, restores it into
+# the OLTP schema, then runs dbt to build the star schema. Not a long-running
+# service — meant to be run once as a standalone ECS task, not as an
+# aws_ecs_service. See Dockerfile.api / Dockerfile.ui for the actual
+# application images.
+
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync --frozen
+
+COPY database/ ./database/
+COPY schemas/ ./schemas/
+COPY utils/ ./utils/
+COPY analytics/ ./analytics/
+COPY config.py alembic.ini ./
+COPY .dvc/config ./.dvc/config
+COPY .dvcignore ./
+COPY data/raw.dvc ./data/raw.dvc
+
+# DVC expects to run inside a Git repository even for a plain `dvc pull` — it
+# checks Git state internally regardless of whether any file is actually
+# tracked by Git. This image never commits anything; the init is only here
+# to satisfy that check.
+RUN git init -q
+
+CMD uv run alembic upgrade head \
+    && uv run dvc remote modify --local origin user "$DVC_USER" \
+    && uv run dvc remote modify --local origin password "$DVC_PASSWORD" \
+    && uv run dvc pull \
+    && uv run python -m analytics.ingestion.restore \
+    && cd analytics/dbt_project \
+    && uv run dbt deps \
+    && uv run dbt build

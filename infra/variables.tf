@@ -15,3 +15,15 @@ variable "db_snapshot_identifier" {
   type        = string
   default     = ""
 }
+
+variable "dvc_user" {
+  description = "Username for basic auth against the DVC remote (DagsHub), used only by the one-off data migration task."
+  type        = string
+  sensitive   = true
+}
+
+variable "dvc_password" {
+  description = "Password for basic auth against the DVC remote (DagsHub), used only by the one-off data migration task."
+  type        = string
+  sensitive   = true
+}
