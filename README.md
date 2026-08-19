@@ -401,7 +401,12 @@ insolvency_prediction_project/
 │       └── database_structure.sql
 ├── infra/
 │   ├── .terraform.lock.hcl
+│   ├── alb.tf
+│   ├── ecr.tf
+│   ├── ecs.tf
 │   ├── provider.tf
+│   ├── rds.tf
+│   ├── s3.tf
 │   ├── security-groups.tf
 │   ├── variables.tf
 │   └── vpc.tf
@@ -787,6 +792,26 @@ To solve the severe class imbalance typical of credit default data, the orchestr
 #### Network Access Enforced Through a Security Group Chain
 * **Choice:** The load balancer, the application containers, and the database each have their own security group, and each accepts inbound traffic only from the security group immediately before it in the request path, rather than a single shared security group or broad IP-based rules.
 * **Justification:** This keeps each hop in the request path independently auditable and means the database has no network path to the internet at all, regardless of what happens at the load balancer or application layer.
+
+#### Container Images Built Once, Consumed by the Running Deployment
+* **Choice:** Container images are pushed to a dedicated registry (ECR) rather than built directly on the machine running the containers.
+* **Justification:** This is what turns the build step into the actual hinge between having code and having a running deployment: the container orchestrator pulls a specific, already-built image rather than rebuilding from source on every start, so what is running is always exactly what was pushed.
+
+#### `destroy` Must Never Fail
+* **Choice:** Every piece of this deployment is configured so it can be torn down at any time, unconditionally, even if it currently holds pushed container images or a running database.
+* **Justification:** A deployment meant to be dismantled when not in use needs tearing it down to be a reliable, unconditional operation, not one that can be blocked by leftover state from earlier use, the alternative is an operator unable to shut something off precisely when they most want to, e.g. after noticing a cost or configuration mistake.
+
+#### A Single, Manually Triggered Database Snapshot, Not an Automatic One
+* **Choice:** The database's data is preserved across teardown cycles through a single snapshot taken manually, once, after the dataset has been seeded, rather than an automatic snapshot generated on every teardown.
+* **Justification:** An automatic snapshot on every teardown either needs a fixed name, which collides with the previous snapshot on the next teardown, or a unique one, which accumulates indefinitely with no automatic cleanup. A single, deliberately created snapshot avoids both failure modes while still making restoration meaningfully faster than repopulating the database from scratch.
+
+#### Two Load Balancer Listeners on Separate Ports, Not Path-Based Routing
+* **Choice:** The load balancer exposes the UI and the API on two separate ports of the same load balancer, rather than routing both through a single port based on URL path.
+* **Justification:** The API's routes are not namespaced under a common path prefix, so path-based routing would have meant rewriting those routes purely to accommodate the deployment, with no corresponding benefit: a second listener carries no additional cost over path-based routing at this traffic scale, making the port-based split the option that requires no application code changes.
+
+#### The Deployment Is Not Kept Running Continuously
+* **Choice:** The stack is provisioned when in use and torn down afterward, rather than left running at all times.
+* **Justification:** Keeping every piece of this deployment (the database, both application containers, and the load balancer) running around the clock costs meaningfully more than provisioning it only for the sessions it is actually used, with no benefit for a portfolio project that isn't serving continuous production traffic.
 
 ---
 
