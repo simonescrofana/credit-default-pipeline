@@ -119,7 +119,7 @@ def restore_database(dir_path: str = "data/raw", chunk_size: int = 10000) -> Non
                 continue
 
             index_names = LARGE_TABLE_INDICES.get(table_name, [])
-            if index_names and not is_sqlite: # # pragma: no cover
+            if index_names and not is_sqlite:  # # pragma: no cover
                 # Exercised manually against the AWS RDS instance during
                 # the v2 migration run, not by the SQLite-based test suite.
                 logger.info(f"Dropping indices on {table_name} before bulk insert...")
@@ -148,7 +148,7 @@ def restore_database(dir_path: str = "data/raw", chunk_size: int = 10000) -> Non
                 f"Recovered total {total_rows_inserted} rows in the table {table_name}!"
             )
 
-            if index_names and not is_sqlite: #  pragma: no cover
+            if index_names and not is_sqlite:  #  pragma: no cover
                 # Same coverage caveat as the drop above: exercised
                 # manually against RDS, not by the SQLite-based tests.
                 logger.info(f"Rebuilding indices on {table_name}...")
