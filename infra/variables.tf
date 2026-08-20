@@ -27,3 +27,20 @@ variable "dvc_password" {
   type        = string
   sensitive   = true
 }
+
+variable "groq_api_key" {
+  description = "API key for the Groq-hosted LLM used by the agent, read at runtime by the api container."
+  type        = string
+  sensitive   = true
+}
+
+variable "logfire_token" {
+  description = "Write token for Logfire observability, read at runtime by the api container."
+  type        = string
+  sensitive   = true
+}
+
+variable "notification_email" {
+  description = "Email address to receive wake/sleep notifications for the project."
+  type        = string
+}

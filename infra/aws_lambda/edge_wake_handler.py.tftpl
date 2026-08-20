@@ -1,0 +1,91 @@
+"""Wake-on-viewer-request Lambda@Edge handler.
+
+This module runs at the CloudFront edge, before every request to the UI
+reaches the origin. If the system is currently asleep, it starts the
+RDS instance and scales the ECS services back up, then lets the request
+continue to the origin (which may still return an error until RDS/ECS
+are actually ready - the viewer is expected to reload after a minute
+or two).
+
+Lambda@Edge does not support environment variables, so the values below
+are injected at deploy time by Terraform's `templatefile()` function
+rather than read from `os.environ`, as the non-edge wake Lambda does.
+
+"""
+
+import time
+
+import boto3
+
+dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+rds = boto3.client("rds", region_name="us-east-1")
+ecs = boto3.client("ecs", region_name="us-east-1")
+sns = boto3.client("sns", region_name="us-east-1")
+
+TABLE_NAME = "${dynamodb_table}"
+DB_INSTANCE_ID = "${db_instance_identifier}"
+CLUSTER_NAME = "${ecs_cluster_name}"
+API_SERVICE_NAME = "${ecs_api_service_name}"
+UI_SERVICE_NAME = "${ecs_ui_service_name}"
+SNS_TOPIC_ARN = "${sns_topic_arn}"
+
+table = dynamodb.Table(TABLE_NAME)
+STATE_KEY = "state"
+
+
+def handler(event: dict, context: object) -> dict:
+    """Wake the project's infrastructure if asleep, then let the request through.
+
+    Reads the current status from DynamoDB. If the system is already
+    awake, only refreshes the last-activity timestamp. Otherwise, starts
+    the RDS instance and scales the ECS services back up, updates the
+    stored status to "awake", and publishes a notification via SNS.
+    Either way, the original CloudFront request is returned unmodified
+    so the request proceeds to the origin.
+
+    Args:
+        event (dict): The CloudFront viewer-request event. Its
+            `Records[0].cf.request` is returned unmodified so CloudFront
+            forwards the request as usual.
+        context (object): The Lambda runtime context. Unused.
+
+    Returns:
+        `dict`: The original CloudFront request object, unmodified.
+
+    """
+    request = event["Records"][0]["cf"]["request"]
+    now = int(time.time())
+
+    item = table.get_item(Key={"id": STATE_KEY}).get("Item")
+    current_status = item.get("status") if item else "asleep"
+
+    table.put_item(
+        Item={
+            "id": STATE_KEY,
+            "status": current_status,
+            "last_request_at": now,
+        }
+    )
+
+    if current_status == "awake":
+        return request
+
+    rds.start_db_instance(DBInstanceIdentifier=DB_INSTANCE_ID)
+    ecs.update_service(cluster=CLUSTER_NAME, service=API_SERVICE_NAME, desiredCount=1)
+    ecs.update_service(cluster=CLUSTER_NAME, service=UI_SERVICE_NAME, desiredCount=1)
+
+    table.put_item(
+        Item={
+            "id": STATE_KEY,
+            "status": "awake",
+            "last_request_at": now,
+        }
+    )
+
+    sns.publish(
+        TopicArn=SNS_TOPIC_ARN,
+        Subject="Project woken up",
+        Message="Someone hit the project URL - RDS and ECS are starting back up.",
+    )
+
+    return request

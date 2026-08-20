@@ -54,6 +54,47 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_secrets" {
   policy_arn = aws_iam_policy.ecs_execution_secrets.arn
 }
 
+resource "aws_secretsmanager_secret" "groq_api_key" {
+  name = "${var.project_name}-groq-api-key"
+}
+
+resource "aws_secretsmanager_secret_version" "groq_api_key" {
+  secret_id     = aws_secretsmanager_secret.groq_api_key.id
+  secret_string = var.groq_api_key
+}
+
+resource "aws_secretsmanager_secret" "logfire_token" {
+  name = "${var.project_name}-logfire-token"
+}
+
+resource "aws_secretsmanager_secret_version" "logfire_token" {
+  secret_id     = aws_secretsmanager_secret.logfire_token.id
+  secret_string = var.logfire_token
+}
+
+resource "aws_iam_policy" "ecs_execution_api_secrets" {
+  name = "${var.project_name}-ecs-execution-api-secrets-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "secretsmanager:GetSecretValue"
+        Resource = [
+          aws_secretsmanager_secret.groq_api_key.arn,
+          aws_secretsmanager_secret.logfire_token.arn
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_execution_api_secrets" {
+  role       = aws_iam_role.ecs_execution.name
+  policy_arn = aws_iam_policy.ecs_execution_api_secrets.arn
+}
+
 resource "aws_ecs_task_definition" "api" {
   family                   = "${var.project_name}-api"
   requires_compatibilities = ["FARGATE"]
@@ -86,6 +127,14 @@ resource "aws_ecs_task_definition" "api" {
         {
           name      = "POSTGRES_PASSWORD"
           valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::"
+        },
+        {
+          name      = "GROQ_API_KEY"
+          valueFrom = aws_secretsmanager_secret.groq_api_key.arn
+        },
+        {
+          name      = "LOGFIRE_TOKEN"
+          valueFrom = aws_secretsmanager_secret.logfire_token.arn
         }
       ]
 

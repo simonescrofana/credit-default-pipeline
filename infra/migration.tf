@@ -60,9 +60,10 @@ resource "aws_ecs_task_definition" "migration" {
           { name = "POSTGRES_DB", value = aws_db_instance.main.db_name },
           { name = "POSTGRES_USER", value = aws_db_instance.main.username },
           # Required by Settings() (config.py validates every field, not just
-          # the ones this container actually uses) but never read by anything
-          # this task runs — alembic/dvc/dbt never touch Logfire or Groq.
-          { name = "LOGFIRE_TOKEN", value = "unused-by-migration-task" },
+          # the ones this container actually uses). GROQ_API_KEY is never read
+          # by anything this task runs — alembic/dvc/dbt never touch Groq.
+          # LOGFIRE_TOKEN uses the real secret below instead: restore.py spans
+          # each chunk, so a valid token gives per-chunk visibility on Logfire.
           { name = "GROQ_API_KEY", value = "unused-by-migration-task" }
         ]
 
@@ -70,6 +71,10 @@ resource "aws_ecs_task_definition" "migration" {
         {
           name      = "POSTGRES_PASSWORD"
           valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::"
+        },
+        {
+          name      = "LOGFIRE_TOKEN"
+          valueFrom = aws_secretsmanager_secret.logfire_token.arn
         },
         {
           name      = "DVC_USER"

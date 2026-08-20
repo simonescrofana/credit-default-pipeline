@@ -19,6 +19,7 @@ COPY utils/ ./utils/
 COPY config.py ./
 COPY mlflow.db ./
 COPY mlruns/ ./mlruns/
+COPY agent/data/chroma_db/ ./agent/data/chroma_db/
 
 EXPOSE 8000
 

@@ -18,7 +18,21 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 
 ---
 
-## 🚀 Getting Started
+## ☁️ Getting Started — AWS Deployment (Fastest)
+
+The full pipeline (API, agent, UI) is deployed on AWS and reachable from any browser, no local setup required:
+
+```
+https://<cloudfront-domain>/
+```
+
+The deployment sleeps automatically after 30 minutes of inactivity, to keep AWS costs low between visits. The **first** request after a period of inactivity wakes the database and application containers back up; this can take a minute or two, and that first request may show an error or fail to load: simply wait a minute and reload the page. Every request after that is served normally, at full speed, until the system goes back to sleep from inactivity again.
+
+The example companies used throughout this README are part of the seeded database and works against this deployment too.
+
+---
+
+## 🚀 Getting Started — Local Setup
 
 This section walks through everything needed to go from a fresh clone to the full stack running, on a clean Ubuntu/WSL2 machine.
 
@@ -203,7 +217,7 @@ It opens at [`http://localhost:8501`](http://localhost:8501) by default.
 
 ## 🛠️ Tech Stack
 
-* **Infrastructure & DevOps:** Docker, Docker Compose, GitHub Actions (CI), Terraform, AWS (RDS, ECR, ECS/Fargate, ALB)
+* **Infrastructure & DevOps:** Docker, Docker Compose, GitHub Actions (CI), Terraform, AWS (RDS, ECR, ECS/Fargate, ALB, CloudFront, Lambda, Lambda@Edge, DynamoDB, EventBridge, SNS)
 * **Environment & Package Management:** Python, uv
 * **Data Engineering & Storage:** PostgreSQL, SQLAlchemy, Alembic, dbt Core
 * **Data Versioning:** DVC
@@ -400,15 +414,27 @@ insolvency_prediction_project/
 │       ├── credit-default-star-schema.sql
 │       └── database_structure.sql
 ├── infra/
+│   ├── aws_lambda/
+│   │   ├── __init__.py
+│   │   ├── edge_wake_handler.py.tftpl
+│   │   ├── wake_handler.py
+│   │   └── sleep_handler.py
 │   ├── .terraform.lock.hcl
 │   ├── alb.tf
+│   ├── cloudfront.tf
+│   ├── dynamodb.tf
 │   ├── ecr.tf
 │   ├── ecs.tf
+│   ├── lambda-edge.tf
+│   ├── lambda-iam.tf
+│   ├── lambda-sleep.tf
+│   ├── lambda-wake.tf
 │   ├── migration.tf
 │   ├── outputs.tf
 │   ├── provider.tf
 │   ├── rds.tf
 │   ├── security-groups.tf
+│   ├── sns.tf
 │   ├── variables.tf
 │   └── vpc.tf
 ├── ml/
@@ -520,6 +546,12 @@ insolvency_prediction_project/
 │   │   ├── __init__.py
 │   │   ├── test_connection.py
 │   │   └── test_models.py
+│   ├── infra/
+│   │   ├── aws_lambda/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_wake_handler.py
+│   │   │   └── test_sleep_handler.py
+│   │   └── __init__.py
 │   ├── ml/
 │   │   ├── dataset/
 │   │   │   ├── __init__.py
@@ -824,13 +856,25 @@ To solve the severe class imbalance typical of credit default data, the orchestr
 * **Choice:** The database's data is preserved across teardown cycles through a single snapshot taken manually, once, after the dataset has been seeded, rather than an automatic snapshot generated on every teardown.
 * **Justification:** An automatic snapshot on every teardown either needs a fixed name, which collides with the previous snapshot on the next teardown, or a unique one, which accumulates indefinitely with no automatic cleanup. A single, deliberately created snapshot avoids both failure modes while still making restoration meaningfully faster than repopulating the database from scratch.
 
-#### Two Load Balancer Listeners on Separate Ports, Not Path-Based Routing
-* **Choice:** The load balancer exposes the UI and the API on two separate ports of the same load balancer, rather than routing both through a single port based on URL path.
-* **Justification:** The API's routes are not namespaced under a common path prefix, so path-based routing would have meant rewriting those routes purely to accommodate the deployment, with no corresponding benefit: a second listener carries no additional cost over path-based routing at this traffic scale, making the port-based split the option that requires no application code changes.
+#### Two Load Balancer Listeners on Separate Ports, Not Path-Based Routing at the Load Balancer
+* **Choice:** The load balancer itself exposes the UI and the API on two separate ports, rather than routing both through a single port based on URL path.
+* **Justification:** The API's routes are not namespaced under a common path prefix, so path-based routing at this layer would have meant rewriting those routes purely to accommodate the deployment, with no corresponding benefit: a second listener carries no additional cost over path-based routing at this traffic scale, making the port-based split the option that requires no application code changes.
 
-#### The Deployment Is Not Kept Running Continuously
-* **Choice:** The stack is provisioned when in use and torn down afterward, rather than left running at all times.
-* **Justification:** Keeping every piece of this deployment (the database, both application containers, and the load balancer) running around the clock costs meaningfully more than provisioning it only for the sessions it is actually used, with no benefit for a portfolio project that isn't serving continuous production traffic.
+#### A Single Public Domain via CloudFront, Not Two Load Balancer Ports Directly
+* **Choice:** A CloudFront distribution sits in front of the load balancer, exposing a single public domain rather than the load balancer's two-port address directly. The default behavior routes to the UI; a `/api/*` path is rewritten by a lightweight CloudFront Function before being forwarded to the API's port, stripping the prefix so the API's own routes stay exactly as they are.
+* **Justification:** This resolves the two-port split above at the edge instead of reopening it at the load balancer: a single, memorable domain is what makes the deployment shareable at all, and rewriting the path at CloudFront gets that without touching a single line of the API's routing. It was introduced primarily to support the wake-on-request system below, which needs a single entry point to intercept, and the unified domain came along as a direct consequence rather than a separate piece of work.
+
+#### The Deployment Wakes on Request and Sleeps on Inactivity, Rather Than Being Managed by Hand
+* **Choice:** The database and both application containers scale down automatically after a period of inactivity and scale back up automatically on the next incoming request, rather than being brought up and torn down manually for each work session.
+* **Justification:** A manually managed on/off cycle works for active development but not for a deployment meant to also be visited unpredictably, e.g. by a recruiter clicking a link. Automating both directions removes the need for the operator to be present for either: the system costs nothing while idle and needs no manual intervention to become available again. The first request after a period of sleep pays the cost of the wake-up itself, typically a minute or two, and may need a reload before the page loads successfully.
+
+#### The Wake Trigger Lives at the CloudFront Edge, Not Behind It
+* **Choice:** The function that checks whether the system is asleep and starts waking it up if so runs as a CloudFront-associated function, evaluated on every incoming request before it ever reaches the load balancer, rather than as an ordinary backend endpoint the frontend would need to call first.
+* **Justification:** A wake trigger implemented as an ordinary backend endpoint could itself only be reached once the backend is already running, defeating the purpose. Running it at the edge, ahead of the origin entirely, means it works precisely in the state it needs to handle: everything behind it still asleep.
+
+#### The Vector Index Is Baked Into the API Image, Not Rebuilt on Startup
+* **Choice:** The documentation index the agent's retrieval node queries is built once, locally, before the API image is built, and copied into that image the same way the trained model artifacts already are, rather than being generated inside the container the first time it starts.
+* **Justification:** Rebuilding the index on every container start would repeat the same deterministic work on every wake-up for no benefit, adding avoidable startup latency to a system already asking a first-time visitor to wait through a cold start. Baking it in mirrors the same reasoning already applied to the trained model bundle: an artifact that doesn't change between deployments belongs in the image, not recomputed at runtime.
 
 ---
 
