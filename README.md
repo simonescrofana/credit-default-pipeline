@@ -22,9 +22,9 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 
 The full pipeline (API, agent, UI) is deployed on AWS and reachable from any browser, no local setup required:
 
-[https://d1lzaqjzdtp6e8.cloudfront.net/](https://d1lzaqjzdtp6e8.cloudfront.net/)
+[https://d2inn8z0bg4agl.cloudfront.net/](https://d2inn8z0bg4agl.cloudfront.net/)
 
-The deployment sleeps automatically after 30 minutes of inactivity, to keep AWS costs low between visits. The **first** request after a period of inactivity wakes the database and application containers back up; this can take a minute or two, and that first request may show an error or fail to load: simply wait a minute and reload the page. Every request after that is served normally, at full speed, until the system goes back to sleep from inactivity again.
+The deployment sleeps automatically after 30 minutes of inactivity, to keep AWS costs at zero between visits. The **first** request after a period of inactivity wakes the database and application containers back up; this can take up to 15-20 minutes and that first request may show errors or fail to load some page assets while it does — simply wait and reload the page. Every request after that is served normally, at full speed, until the system goes back to sleep from inactivity again.
 
 The example companies used throughout this README are part of the seeded database and works against this deployment too.
 

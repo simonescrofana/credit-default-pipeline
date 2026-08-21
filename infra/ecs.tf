@@ -120,7 +120,8 @@ resource "aws_ecs_task_definition" "api" {
         { name = "POSTGRES_HOST", value = aws_db_instance.main.address },
         { name = "POSTGRES_PORT", value = tostring(aws_db_instance.main.port) },
         { name = "POSTGRES_DB", value = aws_db_instance.main.db_name },
-        { name = "POSTGRES_USER", value = aws_db_instance.main.username }
+        { name = "POSTGRES_USER", value = aws_db_instance.main.username },
+        { name = "API_ROOT_PATH", value = "/api" }
       ]
 
       secrets = [

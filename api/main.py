@@ -6,6 +6,7 @@ and exposes a `GET /health` endpoint for container orchestration.
 
 """
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -48,6 +49,12 @@ app = FastAPI(
     "pipeline: a free-text chat endpoint routed through a LangGraph "
     "agent, and direct prediction endpoints bypassing the LLM.",
     lifespan=lifespan,
+    # Empty by default, matching local behavior (no prefix). Set to
+    # "/api" in the AWS deployment, where CloudFront strips the prefix
+    # before forwarding to this container - without it, the OpenAPI
+    # schema and Swagger UI's own links to it are generated as if the
+    # API were served at the root, breaking /docs behind the prefix.
+    root_path=os.environ.get("API_ROOT_PATH", ""),
 )
 
 app.include_router(chat_router)
