@@ -1,0 +1,17 @@
+# Never let build context include local DVC credentials — these must only
+# ever reach a running container via a runtime secret (see Dockerfile.migration
+# and infra/migration.tf), never baked into an image layer.
+.dvc/config.local
+
+# Local environment/secrets, never meant to leave the developer's machine.
+.env
+
+# Everything else that has no reason to be inside any image.
+.git/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+tests/
+docs/

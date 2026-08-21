@@ -14,6 +14,7 @@ import os
 import pandas as pd
 import pyarrow.parquet as pq
 from sqlalchemy import text
+from sqlalchemy.schema import CreateIndex
 
 from database.connection import get_db
 from database.models import (
@@ -40,7 +41,7 @@ MAPPING = [
 ]
 
 
-def restore_database(dir_path: str = "data/raw", chunk_size: int = 50000) -> None:
+def restore_database(dir_path: str = "data/raw", chunk_size: int = 10000) -> None:
     """Restore the database tables using historical data from Parquet files.
 
     This function coordinates the full recovery pipeline by first wiping any
@@ -81,6 +82,18 @@ def restore_database(dir_path: str = "data/raw", chunk_size: int = 50000) -> Non
                 session.execute(text(f"TRUNCATE TABLE {table_name} CASCADE;"))
         session.commit()
 
+        # Indices dropped and rebuilt around the bulk insert of the largest
+        # table only (user_web_logins, ~12M rows). Maintaining a B-tree
+        # incrementally on every one of 12M inserts gets progressively
+        # slower as the index grows past what fits in the instance's
+        # cache; rebuilding it once after the insert is far cheaper.
+        LARGE_TABLE_INDICES = {
+            "user_web_logins": [
+                "idx_user_web_logins_company_id",
+                "idx_logins_user_timeline",
+            ]
+        }
+
         for step in MAPPING:
             table_name = step["table_name"]
             model = step["model"]
@@ -105,6 +118,15 @@ def restore_database(dir_path: str = "data/raw", chunk_size: int = 50000) -> Non
                 )
                 continue
 
+            index_names = LARGE_TABLE_INDICES.get(table_name, [])
+            if index_names and not is_sqlite:  # # pragma: no cover
+                # Exercised manually against the AWS RDS instance during
+                # the v2 migration run, not by the SQLite-based test suite.
+                logger.info(f"Dropping indices on {table_name} before bulk insert...")
+                for index_name in index_names:
+                    session.execute(text(f"DROP INDEX IF EXISTS {index_name};"))
+                session.commit()
+
             total_rows_inserted = 0
 
             for batch in parquet_file.iter_batches(batch_size=chunk_size):
@@ -125,6 +147,15 @@ def restore_database(dir_path: str = "data/raw", chunk_size: int = 50000) -> Non
             logger.info(
                 f"Recovered total {total_rows_inserted} rows in the table {table_name}!"
             )
+
+            if index_names and not is_sqlite:  #  pragma: no cover
+                # Same coverage caveat as the drop above: exercised
+                # manually against RDS, not by the SQLite-based tests.
+                logger.info(f"Rebuilding indices on {table_name}...")
+                indices_by_name = {idx.name: idx for idx in model.__table__.indexes}
+                for index_name in index_names:
+                    session.execute(CreateIndex(indices_by_name[index_name]))
+                session.commit()
 
         if not is_sqlite:
             logger.info("Updating sequences counters (ID) on Postgres...")
@@ -155,5 +186,5 @@ def restore_database(dir_path: str = "data/raw", chunk_size: int = 50000) -> Non
 
 
 if __name__ == "__main__":
-    setup_logging("INFO")
+    setup_logging("DEBUG")
     restore_database()

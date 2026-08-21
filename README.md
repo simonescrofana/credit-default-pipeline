@@ -14,10 +14,23 @@ The system is engineered using a strictly decoupled, multi-layered architecture 
 4. **Explainable AI (xAI) Module:** Interpretability extraction utilizing SHAP to ensure credit scoring compliance and transparency.
 5. **Generative AI Layer:** An agent system built via LangGraph acting as an autonomous financial analyst, querying a ChromaDB vector store, running local inference, and validated by an LLM-as-a-Judge node.
 6. **Application & Serving Layer:** A FastAPI backend exposing validated REST endpoints for predictions and chat interactions, paired with a Streamlit interface acting as a live, interactive demo of the full pipeline.
+7. **Infrastructure Layer:** The containerized stack provisioned on managed AWS infrastructure via Terraform, replacing local execution with a running, publicly reachable deployment.
 
 ---
 
-## 🚀 Getting Started
+## ☁️ Getting Started — AWS Deployment (Fastest)
+
+The full pipeline (API, agent, UI) is deployed on AWS and reachable from any browser, no local setup required:
+
+[https://d2inn8z0bg4agl.cloudfront.net/](https://d2inn8z0bg4agl.cloudfront.net/)
+
+The deployment sleeps automatically after 30 minutes of inactivity, to keep AWS costs at zero between visits. The **first** request after a period of inactivity wakes the database and application containers back up; this can take up to 15-20 minutes and that first request may show errors or fail to load some page assets while it does — simply wait and reload the page. Every request after that is served normally, at full speed, until the system goes back to sleep from inactivity again.
+
+The example companies used throughout this README are part of the seeded database and works against this deployment too.
+
+---
+
+## 🚀 Getting Started — Local Setup
 
 This section walks through everything needed to go from a fresh clone to the full stack running, on a clean Ubuntu/WSL2 machine.
 
@@ -202,7 +215,7 @@ It opens at [`http://localhost:8501`](http://localhost:8501) by default.
 
 ## 🛠️ Tech Stack
 
-* **Infrastructure & DevOps:** Docker, Docker Compose, GitHub Actions (CI)
+* **Infrastructure & DevOps:** Docker, Docker Compose, GitHub Actions (CI), Terraform, AWS (RDS, ECR, ECS/Fargate, ALB, CloudFront, Lambda, Lambda@Edge, DynamoDB, EventBridge, SNS)
 * **Environment & Package Management:** Python, uv
 * **Data Engineering & Storage:** PostgreSQL, SQLAlchemy, Alembic, dbt Core
 * **Data Versioning:** DVC
@@ -398,6 +411,30 @@ insolvency_prediction_project/
 │       ├── credit-default-DFM.sql
 │       ├── credit-default-star-schema.sql
 │       └── database_structure.sql
+├── infra/
+│   ├── aws_lambda/
+│   │   ├── __init__.py
+│   │   ├── edge_wake_handler.py.tftpl
+│   │   ├── wake_handler.py
+│   │   └── sleep_handler.py
+│   ├── .terraform.lock.hcl
+│   ├── alb.tf
+│   ├── cloudfront.tf
+│   ├── dynamodb.tf
+│   ├── ecr.tf
+│   ├── ecs.tf
+│   ├── lambda-edge.tf
+│   ├── lambda-iam.tf
+│   ├── lambda-sleep.tf
+│   ├── lambda-wake.tf
+│   ├── migration.tf
+│   ├── outputs.tf
+│   ├── provider.tf
+│   ├── rds.tf
+│   ├── security-groups.tf
+│   ├── sns.tf
+│   ├── variables.tf
+│   └── vpc.tf
 ├── ml/
 │   ├── dataset/
 │   │   ├── __init__.py
@@ -507,6 +544,12 @@ insolvency_prediction_project/
 │   │   ├── __init__.py
 │   │   ├── test_connection.py
 │   │   └── test_models.py
+│   ├── infra/
+│   │   ├── aws_lambda/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_wake_handler.py
+│   │   │   └── test_sleep_handler.py
+│   │   └── __init__.py
 │   ├── ml/
 │   │   ├── dataset/
 │   │   │   ├── __init__.py
@@ -563,6 +606,7 @@ insolvency_prediction_project/
 │   ├── logging_utils.py
 │   ├── queries.py
 │   └── timezone_utils.py
+├── .dockerignore
 ├── .dvcignore
 ├── .env
 ├── .env.example
@@ -571,6 +615,7 @@ insolvency_prediction_project/
 ├── alembic.ini
 ├── config.py
 ├── Dockerfile.api
+├── Dockerfile.migration
 ├── Dockerfile.ui
 ├── docker-compose.yml
 ├── LICENSE
@@ -760,6 +805,74 @@ To solve the severe class imbalance typical of credit default data, the orchestr
 #### Database Readiness Is Actively Checked, Not Assumed
 * **Choice:** Before running migrations against a freshly started database container, the rebuild process actively polls it for readiness rather than assuming it can already accept connections as soon as the container itself has started.
 * **Justification:** A brand new database volume takes a few seconds to finish its own initialization, and simply waiting for a container to have started is not the same as the service inside it being ready, running migrations immediately after start-up intermittently raced against that initialization and failed. Polling for actual readiness removes that race outright, instead of masking it with a fixed delay that would be too short on a slower machine or wasted time on a faster one.
+
+#### Infrastructure Defined Declaratively, Not Provisioned by Hand
+* **Choice:** AWS infrastructure is defined in Terraform configuration files rather than created through the AWS Console or a sequence of CLI commands.
+* **Justification:** A declarative definition means the entire stack can be recreated or torn down deterministically without manually tracking which resources were created, in which order, or with which configuration. This is particularly relevant for a deployment intended to be dismantled once no longer needed, rather than kept running indefinitely.
+
+#### A Single AWS Region for the Whole Stack
+* **Choice:** Every AWS resource is provisioned in a single region, `us-east-1`, rather than the region geographically closest to the project's operator.
+* **Justification:** For a low-budget, non-production deployment, broader tutorial and documentation coverage and more mature service/pricing availability outweigh the marginal latency difference a closer region would offer, which is irrelevant for occasional, non-production traffic.
+
+#### A Reduced Data Subset in the Deployed Database, Not the Full Simulated Dataset
+* **Choice:** The database backing this deployment holds a reduced subset of the simulated data, sufficient to populate a realistic star schema, rather than the full multi-million-row dataset the local pipeline is capable of generating.
+* **Justification:** Both the production model and the agent consume feature aggregates from the star schema via SQL queries, never the raw transactional rows directly, so a full-scale dataset would add storage cost and populate time without adding anything the deployed system actually uses.
+
+#### A Dedicated VPC, Not the Account's Default One
+* **Choice:** Networking is provisioned as a purpose-built VPC with explicit public and private subnets, rather than relying on the AWS account's default VPC.
+* **Justification:** A default VPC typically offers only public subnets. A dedicated VPC is what makes a genuine public/private split possible in the first place, keeping the database out of reach of the internet by construction rather than by convention.
+
+#### Network Access Enforced Through a Security Group Chain
+* **Choice:** The load balancer, the application containers, and the database each have their own security group, and each accepts inbound traffic only from the security group immediately before it in the request path, rather than a single shared security group or broad IP-based rules.
+* **Justification:** This keeps each hop in the request path independently auditable and means the database has no network path to the internet at all, regardless of what happens at the load balancer or application layer.
+
+#### Container Images Built Once, Consumed by the Running Deployment
+* **Choice:** Container images are pushed to a dedicated registry (ECR) rather than built directly on the machine running the containers.
+* **Justification:** This is what turns the build step into the actual hinge between having code and having a running deployment: the container orchestrator pulls a specific, already-built image rather than rebuilding from source on every start, so what is running is always exactly what was pushed.
+
+#### The Image Registry Sits Outside the Regular Teardown Cycle
+* **Choice:** The container registry and the images pushed to it are managed outside the usual provision/teardown cycle applied to the rest of the deployment, rather than being torn down and recreated alongside everything else.
+* **Justification:** Rebuilding and repushing every image from a developer machine before the deployment can serve traffic again would be a meaningful, avoidable delay every single time the rest of the stack is brought back up, keeping the registry persistent means only the underlying infrastructure needs to be provisioned again, not the application artifacts themselves.
+
+#### Trained Artifacts Bundled Into the Image, Not Fetched From Object Storage
+* **Choice:** The trained model and its accompanying tracking metadata are copied directly into the API's container image at build time, rather than fetched from object storage when the container starts.
+* **Justification:** The model-loading code already resolves these artifacts through a local backend by default, with no code path that talks to object storage directly; bundling them into the image mirrors that same local behavior instead of introducing a new one, and avoids provisioning a storage service that would otherwise sit unused at runtime.
+
+#### A Separate, One-Off Task for Seeding the Database
+* **Choice:** Populating the database from its seed dataset is handled by a dedicated, purpose-built container image and run manually, once, as a standalone task, rather than folded into one of the long-running application images or run automatically as part of every deployment.
+* **Justification:** The application images intentionally include only what they need to serve traffic; seeding involves separate tooling with its own dependencies that the running application never touches. Keeping it as an explicit, manually triggered one-off avoids both bloating the application images and re-running a multi-step, non-trivial population process on every deployment when the database is already populated or being restored from a snapshot.
+
+#### External Credentials Injected at Runtime, Never Part of the Image
+* **Choice:** Credentials the seeding task needs for an external data source are stored in a secrets manager and injected into the container as environment variables when it starts, rather than being written into the image at build time.
+* **Justification:** Anything baked into an image layer is effectively permanent and retrievable by anyone with access to the registry, even after being "removed" in a later layer. Injecting credentials at runtime instead means the image itself carries nothing sensitive, and rotating or revoking them never requires rebuilding or repushing anything.
+
+#### `destroy` Must Never Fail
+* **Choice:** Every piece of this deployment is configured so it can be torn down at any time, unconditionally, even if it currently holds pushed container images or a running database.
+* **Justification:** A deployment meant to be dismantled when not in use needs tearing it down to be a reliable, unconditional operation, not one that can be blocked by leftover state from earlier use, the alternative is an operator unable to shut something off precisely when they most want to, e.g. after noticing a cost or configuration mistake.
+
+#### A Single, Manually Triggered Database Snapshot, Not an Automatic One
+* **Choice:** The database's data is preserved across teardown cycles through a single snapshot taken manually, once, after the dataset has been seeded, rather than an automatic snapshot generated on every teardown.
+* **Justification:** An automatic snapshot on every teardown either needs a fixed name, which collides with the previous snapshot on the next teardown, or a unique one, which accumulates indefinitely with no automatic cleanup. A single, deliberately created snapshot avoids both failure modes while still making restoration meaningfully faster than repopulating the database from scratch.
+
+#### Two Load Balancer Listeners on Separate Ports, Not Path-Based Routing at the Load Balancer
+* **Choice:** The load balancer itself exposes the UI and the API on two separate ports, rather than routing both through a single port based on URL path.
+* **Justification:** The API's routes are not namespaced under a common path prefix, so path-based routing at this layer would have meant rewriting those routes purely to accommodate the deployment, with no corresponding benefit: a second listener carries no additional cost over path-based routing at this traffic scale, making the port-based split the option that requires no application code changes.
+
+#### A Single Public Domain via CloudFront, Not Two Load Balancer Ports Directly
+* **Choice:** A CloudFront distribution sits in front of the load balancer, exposing a single public domain rather than the load balancer's two-port address directly. The default behavior routes to the UI; a `/api/*` path is rewritten by a lightweight CloudFront Function before being forwarded to the API's port, stripping the prefix so the API's own routes stay exactly as they are.
+* **Justification:** This resolves the two-port split above at the edge instead of reopening it at the load balancer: a single, memorable domain is what makes the deployment shareable at all, and rewriting the path at CloudFront gets that without touching a single line of the API's routing. It was introduced primarily to support the wake-on-request system below, which needs a single entry point to intercept, and the unified domain came along as a direct consequence rather than a separate piece of work.
+
+#### The Deployment Wakes on Request and Sleeps on Inactivity, Rather Than Being Managed by Hand
+* **Choice:** The database and both application containers scale down automatically after a period of inactivity and scale back up automatically on the next incoming request, rather than being brought up and torn down manually for each work session.
+* **Justification:** A manually managed on/off cycle works for active development but not for a deployment meant to also be visited unpredictably, e.g. by a recruiter clicking a link. Automating both directions removes the need for the operator to be present for either: the system costs nothing while idle and needs no manual intervention to become available again. The first request after a period of sleep pays the cost of the wake-up itself, typically a minute or two, and may need a reload before the page loads successfully.
+
+#### The Wake Trigger Lives at the CloudFront Edge, Not Behind It
+* **Choice:** The function that checks whether the system is asleep and starts waking it up if so runs as a CloudFront-associated function, evaluated on every incoming request before it ever reaches the load balancer, rather than as an ordinary backend endpoint the frontend would need to call first.
+* **Justification:** A wake trigger implemented as an ordinary backend endpoint could itself only be reached once the backend is already running, defeating the purpose. Running it at the edge, ahead of the origin entirely, means it works precisely in the state it needs to handle: everything behind it still asleep.
+
+#### The Vector Index Is Baked Into the API Image, Not Rebuilt on Startup
+* **Choice:** The documentation index the agent's retrieval node queries is built once, locally, before the API image is built, and copied into that image the same way the trained model artifacts already are, rather than being generated inside the container the first time it starts.
+* **Justification:** Rebuilding the index on every container start would repeat the same deterministic work on every wake-up for no benefit, adding avoidable startup latency to a system already asking a first-time visitor to wait through a cold start. Baking it in mirrors the same reasoning already applied to the trained model bundle: an artifact that doesn't change between deployments belongs in the image, not recomputed at runtime.
 
 ---
 
