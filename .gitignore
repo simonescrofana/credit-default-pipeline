@@ -242,3 +242,4 @@ agent/data/
 crash.log
 crash.*.log
 *.tfvars
+*.zip # generated with terraform apply

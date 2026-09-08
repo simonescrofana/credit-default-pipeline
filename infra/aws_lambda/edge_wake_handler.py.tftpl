@@ -16,6 +16,7 @@ rather than read from `os.environ`, as the non-edge wake Lambda does.
 import time
 
 import boto3
+from botocore.exceptions import ClientError
 
 dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
 rds = boto3.client("rds", region_name="us-east-1")
@@ -70,7 +71,16 @@ def handler(event: dict, context: object) -> dict:
     if current_status == "awake":
         return request
 
-    rds.start_db_instance(DBInstanceIdentifier=DB_INSTANCE_ID)
+    try:
+        rds.start_db_instance(DBInstanceIdentifier=DB_INSTANCE_ID)
+    except ClientError as error:
+        # RDS is already starting, available, or otherwise not in a
+        # "stopped" state - nothing to do, the instance is already on
+        # its way up (or already up). Any other error is unexpected
+        # and should still fail the Lambda.
+        if error.response["Error"]["Code"] != "InvalidDBInstanceState":
+            raise
+
     ecs.update_service(cluster=CLUSTER_NAME, service=API_SERVICE_NAME, desiredCount=1)
     ecs.update_service(cluster=CLUSTER_NAME, service=UI_SERVICE_NAME, desiredCount=1)
 

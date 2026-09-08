@@ -15,6 +15,15 @@ data "archive_file" "edge_wake_lambda_zip" {
   }
 }
 
+resource "aws_lambda_permission" "allow_cloudfront_edge" {
+  provider      = aws.us_east_1
+  statement_id  = "AllowCloudFrontInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.edge_wake.function_name
+  qualifier     = aws_lambda_function.edge_wake.version
+  principal     = "edgelambda.amazonaws.com"
+}
+
 resource "aws_iam_role" "lambda_edge" {
   provider = aws.us_east_1
   name     = "${var.project_name}-lambda-edge-role"
