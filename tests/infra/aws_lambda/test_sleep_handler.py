@@ -13,6 +13,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+from botocore.exceptions import ClientError
 
 ENV = {
     "DYNAMODB_TABLE": "test-wake-state",
@@ -115,3 +116,67 @@ def test_awake_past_threshold_goes_to_sleep(handler_module):
 
     last_put_item = mock_table.put_item.call_args.kwargs["Item"]
     assert last_put_item["status"] == "asleep"
+
+
+def test_rds_not_available_still_stops_ecs(handler_module):
+    """A DB mid-transition (e.g. an automated backup) shouldn't block ECS.
+
+    If `stop_db_instance` raises `InvalidDBInstanceState` (RDS is not in
+    a stoppable state, e.g. it's currently backing up or just started),
+    the handler should swallow that specific error and still scale ECS
+    to zero and mark the system asleep, rather than aborting entirely
+    and leaving ECS running indefinitely.
+
+    """
+    handler_mod, mock_table, mock_rds, mock_ecs, mock_sns = handler_module
+    stale = int(time.time()) - 3600
+    mock_table.get_item.return_value = {
+        "Item": {"id": "state", "status": "awake", "last_request_at": stale}
+    }
+    mock_rds.stop_db_instance.side_effect = ClientError(
+        {
+            "Error": {
+                "Code": "InvalidDBInstanceState",
+                "Message": "Instance test-db is not in available state.",
+            }
+        },
+        "StopDBInstance",
+    )
+
+    result = handler_mod.handler({}, None)
+
+    assert result["statusCode"] == 200
+    assert "going to sleep" in result["body"]
+
+    mock_rds.stop_db_instance.assert_called_once_with(DBInstanceIdentifier="test-db")
+    assert mock_ecs.update_service.call_count == 2
+    for call in mock_ecs.update_service.call_args_list:
+        assert call.kwargs["desiredCount"] == 0
+    mock_sns.publish.assert_called_once()
+
+    last_put_item = mock_table.put_item.call_args.kwargs["Item"]
+    assert last_put_item["status"] == "asleep"
+
+
+def test_other_rds_client_errors_are_not_swallowed(handler_module):
+    """Only InvalidDBInstanceState should be suppressed.
+
+    Anything else (e.g. a permissions problem) should still abort the handler,
+    exactly as before this fix, so real failures aren't hidden.
+
+    """
+    handler_mod, mock_table, mock_rds, mock_ecs, mock_sns = handler_module
+    stale = int(time.time()) - 3600
+    mock_table.get_item.return_value = {
+        "Item": {"id": "state", "status": "awake", "last_request_at": stale}
+    }
+    mock_rds.stop_db_instance.side_effect = ClientError(
+        {"Error": {"Code": "AccessDenied", "Message": "nope"}},
+        "StopDBInstance",
+    )
+
+    with pytest.raises(ClientError):
+        handler_mod.handler({}, None)
+
+    mock_ecs.update_service.assert_not_called()
+    mock_sns.publish.assert_not_called()

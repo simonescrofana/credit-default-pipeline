@@ -11,6 +11,7 @@ import os
 import time
 
 import boto3
+from botocore.exceptions import ClientError
 
 dynamodb = boto3.resource("dynamodb")
 rds = boto3.client("rds")
@@ -60,7 +61,15 @@ def handler(event: dict, context: object) -> dict:
     if idle_for < INACTIVITY_THRESHOLD_SECONDS:
         return {"statusCode": 200, "body": "still active"}
 
-    rds.stop_db_instance(DBInstanceIdentifier=DB_INSTANCE_ID)
+    try:
+        rds.stop_db_instance(DBInstanceIdentifier=DB_INSTANCE_ID)
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] != "InvalidDBInstanceState":
+            raise
+        # RDS is mid-transition (e.g. an automated backup or a recent
+        # start). Don't let this block ECS from scaling down - the next
+        # scheduled run will retry stopping RDS once it's available again.
+
     ecs.update_service(cluster=CLUSTER_NAME, service=API_SERVICE_NAME, desiredCount=0)
     ecs.update_service(cluster=CLUSTER_NAME, service=UI_SERVICE_NAME, desiredCount=0)
 
