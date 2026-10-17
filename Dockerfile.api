@@ -21,6 +21,11 @@ COPY mlflow.db ./
 COPY mlruns/ ./mlruns/
 COPY agent/data/chroma_db/ ./agent/data/chroma_db/
 
+# mlflow.db stores artifact paths as absolute paths from the dev machine
+# (/home/simone/credit-default-pipeline/mlruns/...). This symlink makes them
+# resolve to the mlruns/ copied into the image at /app/mlruns.
+RUN mkdir -p /home/simone && ln -s /app /home/simone/credit-default-pipeline
+
 EXPOSE 8000
 
 CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
