@@ -1,5 +1,8 @@
 # Enterprise Credit Default Pipeline & GenAI Analyst
 
+> [!WARNING]
+> **The AWS deployment has been cancelled.** The live demo hosted on AWS was torn down with `terraform destroy`, so the public CloudFront link below no longer works as it did before, and the wake-on-request behavior described in this README no longer applies. The Terraform configuration under `infra/` is kept for reference only. The whole project can still be run locally, see [Getting Started — Local Setup](#-getting-started--local-setup).
+
 An end-to-end, production-grade MLOps and Data Engineering pipeline designed to predict corporate insolvency on highly imbalanced financial and transactional data. Features a decoupled storage architecture, automated experiment tracking, perimetric data validation, and a Generative AI assistant agent integrated with Explainable AI (xAI) metrics.
 
 ---
